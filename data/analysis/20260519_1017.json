@@ -1,0 +1,87 @@
+[
+  {
+    "code": "000600.SZ",
+    "name": "建投能源",
+    "scores": {
+      "fundamental": 75,
+      "technical": 70,
+      "fundflow": 85,
+      "sentiment": 60
+    },
+    "reasons": {
+      "fundamental": "PE=9.5低估; PB=1.4; ROE=4.6%偏低; 净利润+594650173.0%",
+      "technical": "均线多头",
+      "fundflow": "主力净流入12.4%; 大单净买入",
+      "sentiment": "关联15个概念"
+    },
+    "total": 72.5
+  },
+  {
+    "code": "603999.SH",
+    "name": "读者传媒",
+    "scores": {
+      "fundamental": 65,
+      "technical": 40,
+      "fundflow": 85,
+      "sentiment": 60
+    },
+    "reasons": {
+      "fundamental": "PB=1.9; ROE=0.5%偏低; 净利润+7947344.3%",
+      "technical": "均线空头",
+      "fundflow": "主力净流入10.5%; 大单净买入",
+      "sentiment": "关联8个概念"
+    },
+    "total": 62.5
+  },
+  {
+    "code": "002031.SZ",
+    "name": "巨轮智能",
+    "scores": {
+      "fundamental": 25,
+      "technical": 70,
+      "fundflow": 40,
+      "sentiment": 63
+    },
+    "reasons": {
+      "fundamental": "ROE=-1.8%偏低; 净利润-38360528.8%",
+      "technical": "均线多头",
+      "fundflow": "大单净卖出",
+      "sentiment": "热门概念: 工业机器人; 关联7个概念"
+    },
+    "total": 49.5
+  },
+  {
+    "code": "002905.SZ",
+    "name": "金逸影视",
+    "scores": {
+      "fundamental": 15,
+      "technical": 40,
+      "fundflow": 85,
+      "sentiment": 58
+    },
+    "reasons": {
+      "fundamental": "PE=115.1偏高; ROE=-28.8%偏低; 净利润-26759620.9%",
+      "technical": "均线空头",
+      "fundflow": "主力净流入37.1%; 大单净买入",
+      "sentiment": "热门概念: 大消费"
+    },
+    "total": 49.5
+  },
+  {
+    "code": "002880.SZ",
+    "name": "卫光生物",
+    "scores": {
+      "fundamental": 55,
+      "technical": 50,
+      "fundflow": 20,
+      "sentiment": 55
+    },
+    "reasons": {
+      "fundamental": "ROE=1.3%偏低; 净利润+30880984.4%",
+      "technical": "",
+      "fundflow": "主力净流出69.4%; 大单净卖出",
+      "sentiment": "关联7个概念"
+    },
+    "total": 45.0
+  }
+]

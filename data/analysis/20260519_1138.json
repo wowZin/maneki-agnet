@@ -1,0 +1,53 @@
+[
+  {
+    "code": "002763.SZ",
+    "name": "汇洁股份",
+    "scores": {
+      "fundamental": 45,
+      "technical": 50,
+      "fundflow": 70,
+      "sentiment": 55
+    },
+    "reasons": {
+      "fundamental": "PE=62.9偏高; ROE=5.0%偏低; 净利润+87980631.7%",
+      "technical": "",
+      "fundflow": "T+1降级; 净流入32.0%",
+      "sentiment": "申万行业: 纺织服饰"
+    },
+    "total": 55.0
+  },
+  {
+    "code": "603311.SH",
+    "name": "金海高科",
+    "scores": {
+      "fundamental": 45,
+      "technical": 70,
+      "fundflow": 30,
+      "sentiment": 55
+    },
+    "reasons": {
+      "fundamental": "PE=76.4偏高; ROE=2.6%偏低; 净利润+14893474.7%",
+      "technical": "均线多头",
+      "fundflow": "T+1降级; 净流出29.3%",
+      "sentiment": "4个概念"
+    },
+    "total": 50.0
+  },
+  {
+    "code": "600156.SH",
+    "name": "华升股份",
+    "scores": {
+      "fundamental": 25,
+      "technical": 70,
+      "fundflow": 30,
+      "sentiment": 55
+    },
+    "reasons": {
+      "fundamental": "ROE=-1.6%偏低; 净利润-15600398.9%",
+      "technical": "均线多头",
+      "fundflow": "T+1降级; 净流出9.2%",
+      "sentiment": "7个概念"
+    },
+    "total": 45.0
+  }
+]

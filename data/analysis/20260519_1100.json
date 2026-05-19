@@ -1,0 +1,53 @@
+[
+  {
+    "code": "002498.SZ",
+    "name": "汉缆股份",
+    "scores": {
+      "fundamental": 45,
+      "technical": 70,
+      "fundflow": 40,
+      "sentiment": 80
+    },
+    "reasons": {
+      "fundamental": "PE=58.0偏高; ROE=1.8%偏低; 净利润+136236940.0%",
+      "technical": "均线多头",
+      "fundflow": "大单净卖出",
+      "sentiment": "热门: 核电,智能电网,新基建; 16个概念"
+    },
+    "total": 58.75
+  },
+  {
+    "code": "000837.SZ",
+    "name": "秦川机床",
+    "scores": {
+      "fundamental": 45,
+      "technical": 70,
+      "fundflow": 20,
+      "sentiment": 80
+    },
+    "reasons": {
+      "fundamental": "PE=238.3偏高; ROE=0.5%偏低; 净利润+6525576.2%",
+      "technical": "均线多头",
+      "fundflow": "主力净流出16.4%; 大单净卖出",
+      "sentiment": "热门: 航空发动机,航天军工,工业机器人; 14个概念"
+    },
+    "total": 53.75
+  },
+  {
+    "code": "605376.SH",
+    "name": "博迁新材",
+    "scores": {
+      "fundamental": 45,
+      "technical": 50,
+      "fundflow": 20,
+      "sentiment": 55
+    },
+    "reasons": {
+      "fundamental": "PE=140.8偏高; ROE=4.1%偏低; 净利润+68154340.2%",
+      "technical": "",
+      "fundflow": "主力净流出12.9%; 大单净卖出",
+      "sentiment": "5个概念"
+    },
+    "total": 42.5
+  }
+]
