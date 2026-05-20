@@ -2257,7 +2257,7 @@ def push_feishu(results):
 def main():
     parser = argparse.ArgumentParser(description="涨停预测流程")
     parser.add_argument("--from-file", help="从已有信号文件加载", default=None)
-    parser.add_argument("--top", type=int, default=3, help="分析前N只股票")
+    parser.add_argument("--top", type=int, default=50, help="分析前N只股票（默认50，覆盖全部候选股）")
     args = parser.parse_args()
     
     clear_tushare_cache()  # 每次流水线启动清空API缓存
