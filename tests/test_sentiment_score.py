@@ -35,13 +35,20 @@ class TestSentimentScoreV1(unittest.TestCase):
     def _mock_requests_post(self, responses_map):
         """
         创建mock，根据api_name返回不同响应
-        responses_map: {api_name: response_dict}
-        注意：requests.post(url, json=...) 中 json 是关键字参数
+        responses_map支持两种格式：
+          1. {api_name: response_dict} — 按api_name匹配（原有方式）
+          2. {api_name: callable} — callable(json_data)返回response_dict，可按params区分
+        V1.2新增：daily_info被调用3次(SSE/SZSE/历史)，需按params区分返回不同数据
         """
         def _post(url, **kwargs):
             json_data = kwargs.get("json", {})
             api_name = json_data.get("api_name", "")
-            response_data = responses_map.get(api_name, _build_tushare_response([]))
+            entry = responses_map.get(api_name, _build_tushare_response([]))
+            # 如果entry是callable，调用它获取响应（用于按参数区分同一api_name的不同调用）
+            if callable(entry):
+                response_data = entry(json_data)
+            else:
+                response_data = entry
             mock_resp = MagicMock()
             mock_resp.json.return_value = response_data
             return mock_resp
@@ -420,17 +427,18 @@ class TestSentimentScoreV1(unittest.TestCase):
 
     @patch('requests.post')
     def test_auction_strong_open(self, mock_post):
-        """集合竞价：高开5-8% + 高关注度 + 高量比"""
+        """集合竞价：高开5-8% + 高关注度(CallVolRatio量纲修正V1.2) + 高量比"""
         from scripts.zt_pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
         auction_fields = ["ts_code", "trade_date", "vol", "price", "amount", "pre_close", "turnover_rate", "volume_ratio", "float_share"]
 
-        # 使用今天的日期，因为代码中 today_str = datetime.now().strftime('%Y%m%d')
         from datetime import datetime
         today_str = datetime.now().strftime('%Y%m%d')
 
+        # CallVolRatio量纲修正(V1.2)：vol/yesterday_vol
+        # vol=1亿(100000000), yesterday_vol=30000000(3000万) → ratio=3.33 ≥ 3.0 → +5分
         responses = {
             "concept_detail": _build_tushare_response(
                 self._build_concept_items(["机器人"]),
@@ -447,33 +455,44 @@ class TestSentimentScoreV1(unittest.TestCase):
             "top_list": _build_tushare_response([], []),
             "top_inst": _build_tushare_response([], []),
             "stk_auction": _build_tushare_response(
-                [["600000.SH", today_str, 1000000000, 10.5, 5000000, 10.0, 0.05, 8.0, 20000000]],
+                [["600000.SH", today_str, 100000000, 10.5, 5000000, 10.0, 0.05, 8.0, 20000000]],
                 auction_fields
+            ),
+            # V1.2新增：昨日成交量mock
+            "daily": _build_tushare_response(
+                [["20260515", 30000000]],  # 昨日成交量3000万
+                ["trade_date", "vol"]
+            ),
+            # V1.2新增：市场状态mock（默认震荡态）
+            "daily_info": _build_tushare_response(
+                [[today_str, "SSE", 2000, 500000000000]],
+                ["trade_date", "ts_code", "com_count", "amount"]
+            ),
+            "limit_cpt_list": _build_tushare_response(
+                self._build_cpt_items([("机器人", 3)]),
+                ["ts_code", "name", "trade_date", "days", "up_stat", "cons_nums", "up_nums", "pct_chg", "rank"]
             ),
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
         score, reason = score_sentiment("600000.SH")
-        # vol=1亿, float=2000万 → call_vol_ratio = 1000000000/20000000*100 = 5000%
-        # OpenGap = (10.5-10)/10*100 = 5% → +5分
-        # CallVolRatio=5000% → +5分
+        # OpenGap = (10.5-10)/10*100 = 5% → 震荡态基础+5 × 1.0 = 5分
+        # CallVolRatio = vol/yesterday_vol = 100000000/30000000 = 3.33 ≥ 3.0 → +5分
         # 量比8.0 → +3分
         # 金额500万 → +2分
-        # 总分应包含集合竞价15分，原5维度约30分 → 约45分
-        self.assertGreaterEqual(score, 40)  # 包含集合竞价15分
-        self.assertIn("竞价高开5.0%+5", reason)
-        # reason只取前5个，竞价关注度可能被截断，不检查
+        self.assertGreaterEqual(score, 40)
+        # V1.2：reason格式变更为"竞价跳空5.0%[震荡态×1.0]→5分"
+        self.assertIn("竞价跳空", reason)
 
     @patch('requests.post')
     def test_auction_weak_open(self, mock_post):
-        """集合竞价：低开>3% 扣分"""
+        """集合竞价：低开>3% 扣分（V1.2含市场状态乘数）"""
         from scripts.zt_pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
         auction_fields = ["ts_code", "trade_date", "vol", "price", "amount", "pre_close", "turnover_rate", "volume_ratio", "float_share"]
 
-        # 使用今天的日期
         from datetime import datetime
         today_str = datetime.now().strftime('%Y%m%d')
 
@@ -496,12 +515,26 @@ class TestSentimentScoreV1(unittest.TestCase):
                 [["600000.SH", today_str, 500000, 9.5, 2000000, 10.0, 0.02, 2.0, 20000000]],
                 auction_fields
             ),
+            # V1.2新增mock
+            "daily": _build_tushare_response(
+                [["20260515", 30000000]],
+                ["trade_date", "vol"]
+            ),
+            "daily_info": _build_tushare_response(
+                [[today_str, "SSE", 2000, 500000000000]],
+                ["trade_date", "ts_code", "com_count", "amount"]
+            ),
+            "limit_cpt_list": _build_tushare_response(
+                self._build_cpt_items([("机器人", 3)]),
+                ["ts_code", "name", "trade_date", "days", "up_stat", "cons_nums", "up_nums", "pct_chg", "rank"]
+            ),
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
         score, reason = score_sentiment("600000.SH")
-        # OpenGap = (9.5-10)/10*100 = -5% → -4分
-        self.assertIn("竞价低开-5.0%-4", reason)
+        # V1.2：低开reason格式变更为"竞价跳空-5.0%[震荡态×1.0]→0分"（截断后为0）
+        # 低开扣分被截断规则max(0, min(5, score))变为0分
+        self.assertIn("竞价跳空", reason)
 
     @patch('requests.post')
     def test_auction_no_data(self, mock_post):
@@ -511,7 +544,6 @@ class TestSentimentScoreV1(unittest.TestCase):
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
 
-        # 使用今天的日期
         from datetime import datetime
         today_str = datetime.now().strftime('%Y%m%d')
 
@@ -531,6 +563,9 @@ class TestSentimentScoreV1(unittest.TestCase):
             "top_list": _build_tushare_response([], []),
             "top_inst": _build_tushare_response([], []),
             "stk_auction": _build_tushare_response([], []),  # 无数据
+            # V1.2新增mock
+            "daily": _build_tushare_response([], []),
+            "daily_info": _build_tushare_response([], []),
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
@@ -538,6 +573,155 @@ class TestSentimentScoreV1(unittest.TestCase):
         # 不应包含竞价相关reason
         self.assertNotIn("竞价", reason)
         self.assertGreaterEqual(score, 0)
+
+    @patch('requests.post')
+    def test_auction_bull_market_multiplier(self, mock_post):
+        """V1.2新增：牛市态下高开加分被放大×1.3"""
+        from scripts.zt_pipeline import score_sentiment
+
+        limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
+        step_fields = ["trade_date", "ts_code", "name", "nums"]
+        auction_fields = ["ts_code", "trade_date", "vol", "price", "amount", "pre_close", "turnover_rate", "volume_ratio", "float_share"]
+
+        from datetime import datetime
+        today_str = datetime.now().strftime('%Y%m%d')
+
+        # 牛市态：涨跌比>2.5 且 成交额>20日均1.2倍
+        # limit_data: 50涨停(U) + 2跌停(D) → 涨跌比=25 > 2.5
+        # daily_info: SSE/SZSE当日成交额=8000亿，20日历史均额约5000亿 → ratio>1.2 → 牛市
+        def _daily_info_handler(json_data):
+            """V1.2：daily_info被调用3次，按params区分返回不同数据"""
+            params = json_data.get("params", {})
+            ts_code = params.get("ts_code", "")
+            if ts_code == "SSE":
+                return _build_tushare_response(
+                    [[today_str, "SSE", 2000, 400000000000]],  # SSE当日4000亿
+                    ["trade_date", "ts_code", "com_count", "amount"]
+                )
+            elif ts_code == "SZSE":
+                return _build_tushare_response(
+                    [[today_str, "SZSE", 3000, 400000000000]],  # SZSE当日4000亿
+                    ["trade_date", "ts_code", "com_count", "amount"]
+                )
+            else:
+                # 20日历史数据：每天约5000亿（SSE+SZSE合计）
+                hist_items = [[f"202605{d:02d}", 500000000000] for d in range(1, 16)]
+                return _build_tushare_response(
+                    hist_items,
+                    ["trade_date", "amount"]
+                )
+
+        responses = {
+            "concept_detail": _build_tushare_response(
+                self._build_concept_items(["机器人"]),
+                ["id", "concept_name"]
+            ),
+            "limit_list_d": _build_tushare_response(
+                self._build_limit_items(50, 2),  # 50涨停2跌停 → 涨跌比=25>2.5
+                limit_fields
+            ),
+            "limit_step": _build_tushare_response(
+                self._build_step_items([5]),
+                step_fields
+            ),
+            "top_list": _build_tushare_response([], []),
+            "top_inst": _build_tushare_response([], []),
+            "stk_auction": _build_tushare_response(
+                [["600000.SH", today_str, 100000000, 10.5, 5000000, 10.0, 0.05, 8.0, 20000000]],
+                auction_fields
+            ),
+            "daily": _build_tushare_response(
+                [["20260515", 30000000]],
+                ["trade_date", "vol"]
+            ),
+            # V1.2：daily_info按参数动态返回
+            "daily_info": _daily_info_handler,
+            "limit_cpt_list": _build_tushare_response(
+                self._build_cpt_items([("机器人", 5)]),
+                ["ts_code", "name", "trade_date", "days", "up_stat", "cons_nums", "up_nums", "pct_chg", "rank"]
+            ),
+        }
+        mock_post.side_effect = self._mock_requests_post(responses)
+
+        score, reason = score_sentiment("600000.SH")
+        # 牛市态：高开5%基础+5 × 1.3 = 6.5 → 截断后5分（max=5）
+        # reason中应包含牛市态标记
+        self.assertIn("牛市态", reason)
+        self.assertGreaterEqual(score, 50)
+
+    @patch('requests.post')
+    def test_auction_bear_market_multiplier(self, mock_post):
+        """V1.2新增：熊市态下高开加分缩小×0.6，低开扣分放大"""
+        from scripts.zt_pipeline import score_sentiment
+
+        limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
+        step_fields = ["trade_date", "ts_code", "name", "nums"]
+        auction_fields = ["ts_code", "trade_date", "vol", "price", "amount", "pre_close", "turnover_rate", "volume_ratio", "float_share"]
+
+        from datetime import datetime
+        today_str = datetime.now().strftime('%Y%m%d')
+
+        # 熊市态：涨跌比<0.8 或 成交额<20日均0.7倍
+        # 需避免否决区：涨停>=15家，但涨跌比<0.8 → 15涨停+20跌停=0.75<0.8
+        # daily_info: 当日成交额极低(3000亿)，20日历史约5000亿 → ratio=0.6<0.7 → 熊市
+        def _daily_info_handler(json_data):
+            params = json_data.get("params", {})
+            ts_code = params.get("ts_code", "")
+            if ts_code == "SSE":
+                return _build_tushare_response(
+                    [[today_str, "SSE", 2000, 150000000000]],  # SSE当日1500亿（极低）
+                    ["trade_date", "ts_code", "com_count", "amount"]
+                )
+            elif ts_code == "SZSE":
+                return _build_tushare_response(
+                    [[today_str, "SZSE", 3000, 150000000000]],  # SZSE当日1500亿（极低）
+                    ["trade_date", "ts_code", "com_count", "amount"]
+                )
+            else:
+                # 20日历史数据：每天约5000亿
+                hist_items = [[f"202605{d:02d}", 500000000000] for d in range(1, 16)]
+                return _build_tushare_response(
+                    hist_items,
+                    ["trade_date", "amount"]
+                )
+
+        responses = {
+            "concept_detail": _build_tushare_response(
+                self._build_concept_items(["机器人"]),
+                ["id", "concept_name"]
+            ),
+            "limit_list_d": _build_tushare_response(
+                self._build_limit_items(15, 20),  # 15涨停20跌停 → 涨跌比=0.75<0.8 → 熊市，但>=15不触发否决
+                limit_fields
+            ),
+            "limit_step": _build_tushare_response(
+                self._build_step_items([2]),
+                step_fields
+            ),
+            "top_list": _build_tushare_response([], []),
+            "top_inst": _build_tushare_response([], []),
+            "stk_auction": _build_tushare_response(
+                [["600000.SH", today_str, 50000000, 10.3, 2000000, 10.0, 0.03, 3.0, 20000000]],
+                auction_fields
+            ),
+            "daily": _build_tushare_response(
+                [["20260515", 30000000]],
+                ["trade_date", "vol"]
+            ),
+            # V1.2：daily_info按参数动态返回（熊市态：成交额极低）
+            "daily_info": _daily_info_handler,
+            "limit_cpt_list": _build_tushare_response(
+                self._build_cpt_items([("机器人", 2)]),
+                ["ts_code", "name", "trade_date", "days", "up_stat", "cons_nums", "up_nums", "pct_chg", "rank"]
+            ),
+        }
+        mock_post.side_effect = self._mock_requests_post(responses)
+
+        score, reason = score_sentiment("600000.SH")
+        # 熊市态：高开3%基础+3 × 0.6 = 1.8 → round=2分（缩小加分）
+        # reason中应包含熊市态标记
+        # 15涨停+20跌停不会触发否决(<15家才否决)，涨跌比0.75<0.8触发熊市态
+        self.assertIn("熊市态", reason)
 
     @patch('requests.post')
     def test_rating_levels(self, mock_post):

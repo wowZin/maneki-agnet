@@ -1103,9 +1103,16 @@ _FUND_FLOW_DATE = None
 
 def score_fundflow(code):
     """
-    资金面涨停潜力预判 V1.0
-    五维度量化评分：超大单主力35分 + 龙虎榜机构游资25分 + 北向聪明资金12分 + 分时盘口20分 + 筹码抛压8分
-    含一票否决规则
+    资金面涨停潜力预判 V2.0
+    五维度量化评分：超大单主力35分 + 龙虎榜机构游资25分 + 分时盘口20分 + 融资聪明资金7分 + 筹码抛压13分
+    含一票否决规则（含V2.0市场状态调节器+一字板豁免）
+    
+    V2.0变更：
+    - 维4权重12→7(降共线性)，维5权重8→13(强锁仓)
+    - 维2盘中从大单代理→封板质量因子(limit_list)
+    - 维4盘中从大单代理→融资余额增速(margin_detail)
+    - 否决3加市场状态调节器(低迷市放宽至-0.75)
+    - 否决4加一字板豁免
     
     注意：分时盘口为实时数据，T+1场景下用资金流向结构替代评估
     """
@@ -1176,6 +1183,7 @@ def score_fundflow(code):
         pass
     
     # ===== 2. 一票否决检查 =====
+    yiziban_exempt = False  # V2.0一字板豁免标志
     # 2.1 主力持续流出：近3日累计净流出 > 0.5%流通市值
     if moneyflow_data:
         recent_3d = moneyflow_data[:3] if len(moneyflow_data) >= 3 else moneyflow_data
@@ -1186,7 +1194,29 @@ def score_fundflow(code):
                 veto_flags.append(f"主力3日净流出{net_3d/10000:.2f}万")
     
     # 2.2 纯散户博弈：主力净占比 < 10%（无大资金控盘）
-    if moneyflow_data:
+    # V2.0一字板豁免：一字板(pct_chg≈10%且开板次数=0)无大单成交属正常，主力已高度控盘
+    is_yiziban = False  # 一字板标志
+    if daily_basic_data:
+        pct_chg = safe_float(daily_basic_data[0].get("pct_change", 0))
+        # 用涨跌停数据判断一字板（开板次数=0且涨停）
+        try:
+            resp_ll = call_tushare("limit_list", token, {"ts_code": code, "trade_date": today}, "trade_date,ts_code,close,pct_chg,open_times,limit")
+            ll_items = resp_ll.get("data", {}).get("items", [])
+            if ll_items:
+                ll_fields = resp_ll.get("data", {}).get("fields", [])
+                ll_data = list_to_dict(ll_items, ll_fields)
+                if ll_data:
+                    open_times = safe_float(ll_data[0].get("open_times", 1))
+                    limit_type = str(ll_data[0].get("limit", "")).upper()
+                    if limit_type == "U" and open_times == 0:
+                        is_yiziban = True
+        except:
+            pass
+        # 简化判断：涨幅>=9.9%也视为一字板候选（limit_list可能无数据）
+        if not is_yiziban and pct_chg >= 9.9:
+            is_yiziban = True
+    
+    if moneyflow_data and not is_yiziban:
         latest = moneyflow_data[0]
         buy_elg = safe_float(latest.get("buy_elg_amount", 0))
         sell_elg = safe_float(latest.get("sell_elg_amount", 0))
@@ -1201,6 +1231,9 @@ def score_fundflow(code):
             main_ratio = (net_elg + net_lg) / total_vol * 100
             if main_ratio < 10:
                 veto_flags.append(f"纯散户博弈:主力净占比{main_ratio:.1f}%<10%")
+    elif is_yiziban:
+        # 一字板豁免：不触发否决，但记录豁免信息到reason
+        yiziban_exempt = True
     
     # 2.3 龙虎榜大额撤离：机构/游资净卖出 > 净买入2倍
     if top_inst_data:
@@ -1217,6 +1250,33 @@ def score_fundflow(code):
     
     # 2.4 分时资金背离：股价拉升>3%但资金净流入为负
     # T+1场景简化：当日涨幅>3%但主力净流出
+    # V2.0市场状态调节器：低迷市(成交额<8000亿或跌停>20家)阈值放宽
+    corr_threshold = -0.6  # 默认相关系数阈值
+    if daily_basic_data:
+        try:
+            # 获取全市场成交额和跌停家数判断市场状态
+            resp_info = call_tushare("daily_info", token, {"trade_date": today, "ts_code": "SSE"}, "trade_date,ts_code,amount")
+            info_items = resp_info.get("data", {}).get("items", [])
+            market_amount = 0
+            if info_items:
+                info_fields = resp_info.get("data", {}).get("fields", [])
+                info_data = list_to_dict(info_items, info_fields)
+                if info_data:
+                    market_amount = safe_float(info_data[0].get("amount", 0))  # 万元
+            # 获取跌停家数
+            limit_down_cnt = 0
+            try:
+                resp_ld = call_tushare("limit_list_d", token, {"trade_date": today, "limit_type": "D"}, "trade_date,ts_code")
+                ld_items = resp_ld.get("data", {}).get("items", [])
+                limit_down_cnt = len(ld_items) if ld_items else 0
+            except:
+                pass
+            # 低迷市判定：全市场成交额<8000亿(80000000万) 或 跌停>20家
+            if market_amount < 80000000 or limit_down_cnt > 20:
+                corr_threshold = -0.75
+        except:
+            pass
+    
     if moneyflow_data and daily_basic_data:
         latest_basic = daily_basic_data[0]
         pct_change = safe_float(latest_basic.get("pct_change", 0))
@@ -1224,7 +1284,13 @@ def score_fundflow(code):
             latest_mf = moneyflow_data[0]
             net_mf = safe_float(latest_mf.get("net_mf_amount", 0))
             if net_mf < 0:
-                veto_flags.append(f"资金背离:涨{pct_change:.1f}%但净流出{abs(net_mf)/10000:.0f}万")
+                # V2.0: 低迷市用-0.75阈值（此处简化为：低迷市不触发此否决）
+                # 完整实现需算滑动相关系数，T+1场景用简化逻辑
+                if corr_threshold < -0.6:
+                    # 低迷市放宽，不触发背离否决
+                    pass
+                else:
+                    veto_flags.append(f"资金背离:涨{pct_change:.1f}%但净流出{abs(net_mf)/10000:.0f}万")
     
     # 否决5(尾盘集中兑现)：14:45后资金净流出占全天流出比例>60%
     # T+1替代：主力净流出>0.3%流通市值（与设计文档维度1规模阈值对齐）
@@ -1296,36 +1362,69 @@ def score_fundflow(code):
     dim2_reason = []
     
     if is_trading_time():
-        # 盘中方案：龙虎榜T+1不可用，改用大单代理
-        if moneyflow_data:
-            latest = moneyflow_data[0]
-            buy_lg = safe_float(latest.get("buy_lg_amount", 0))
-            sell_lg = safe_float(latest.get("sell_lg_amount", 0))
-            buy_elg = safe_float(latest.get("buy_elg_amount", 0))
-            sell_elg = safe_float(latest.get("sell_elg_amount", 0))
-            big_net = (buy_lg + buy_elg) - (sell_lg + sell_elg)
+        # V2.0盘中方案：从大单代理改为封板质量因子(T-1日limit_list)
+        # 消除与维度1(大单流入)的共线性，封板质量反映游资/机构合力
+        limit_list_data = []
+        try:
+            resp = call_tushare("limit_list", token, {"ts_code": code}, "trade_date,ts_code,close,pct_chg,open_times,fd_amount,first_time,last_time,up_stat,limit")
+            items = resp.get("data", {}).get("items", [])
+            fields = resp.get("data", {}).get("fields", [])
+            limit_list_data = list_to_dict(items, fields)
+        except:
+            pass
+        
+        if limit_list_data:
+            # 取T-1日数据(最新一条)
+            latest_ll = limit_list_data[0]
+            fd_amount = safe_float(latest_ll.get("fd_amount", 0))  # 封单金额(万)
+            first_time = latest_ll.get("first_time", "")  # 首次涨停时间
+            open_times = safe_float(latest_ll.get("open_times", 1))  # 开板次数
+            limit_type = str(latest_ll.get("limit", "")).upper()
             
-            # 大单合力：超大单+大单净买入 > 3000万
-            if big_net > 3000:
-                dim2_score += 12
-                dim2_reason.append(f"[盘中]大单净买{big_net/10000:.2f}亿+12")
+            # 封板强度：封单金额 > 流通市值1%
+            if daily_basic_data and fd_amount > 0:
+                circ_mv = safe_float(daily_basic_data[0].get("circ_mv", 0))  # 万
+                if circ_mv > 0:
+                    fd_ratio = fd_amount / circ_mv * 100
+                    if fd_ratio >= 1:
+                        dim2_score += 10
+                        dim2_reason.append(f"[盘中]封单{fd_ratio:.1f}%流通市值+10")
+                    elif fd_ratio < 0.3:
+                        dim2_score -= 10
+                        dim2_reason.append(f"[盘中]封单弱{fd_ratio:.1f}%-10")
             
-            # 资金主导：大单净买入占比 > 40%
-            total_buy = buy_lg + buy_elg
-            if total_buy > 0 and big_net > 0 and (big_net / total_buy) > 0.4:
-                dim2_score += 8
-                dim2_reason.append(f"[盘中]大单主导+8")
+            # 首封时间：<10:30(早封板=游资合力强)
+            if first_time and limit_type == "U":
+                try:
+                    hhmm = first_time.replace(":", "")
+                    if hhmm < "103000":
+                        dim2_score += 8
+                        dim2_reason.append(f"[盘中]早封板{first_time}+8")
+                    elif hhmm > "140000":
+                        dim2_score -= 8
+                        dim2_reason.append(f"[盘中]尾板{first_time}-8")
+                except:
+                    pass
             
-            # 结构健康：买盘/卖盘比 > 1.5
-            total_sell = sell_lg + sell_elg
-            if total_sell > 0 and total_buy / total_sell > 1.5:
-                dim2_score += 5
-                dim2_reason.append(f"[盘中]买卖比{total_buy/total_sell:.1f}+5")
+            # 开板次数：0次(一字板/秒封)+7分，1次+3分，>=3次扣7分
+            if limit_type == "U":
+                if open_times == 0:
+                    dim2_score += 7
+                    dim2_reason.append(f"[盘中]秒封/一字板+7")
+                elif open_times == 1:
+                    dim2_score += 3
+                    dim2_reason.append(f"[盘中]开板1次+3")
+                elif open_times >= 3:
+                    dim2_score -= 7
+                    dim2_reason.append(f"[盘中]开板{int(open_times)}次-7")
             
-            # 负向过滤：大单持续净流出
-            if big_net < -3000:
-                dim2_score = max(0, dim2_score - 15)
-                dim2_reason.append(f"[盘中]大单净流出{abs(big_net)/10000:.2f}亿-15")
+            # 负向：T-1日未涨停或炸板
+            if limit_type != "U":
+                dim2_score -= 15
+                dim2_reason.append(f"[盘中]T-1未涨停-15")
+        else:
+            # 无limit_list数据（非涨停股），给基础分0
+            dim2_reason.append(f"[盘中]无封板数据")
     else:
         # 盘后方案：Tushare龙虎榜
         inst_net_buy = 0
@@ -1400,42 +1499,66 @@ def score_fundflow(code):
     if dim3_reason:
         reason.append(f"[盘口{dim3_score}分] {' '.join(dim3_reason)}")
     
-    # ===== 6. 维度4：北向与聪明资金（12分）=====
+    # ===== 6. 维度4：融资与聪明资金（7分）V2.0: 权重12→7 =====
     dim4_score = 0
     dim4_reason = []
     
     if is_trading_time():
-        # 盘中方案：北向实时已停，改用大单代理
-        if moneyflow_data:
-            latest = moneyflow_data[0]
-            buy_lg = safe_float(latest.get("buy_lg_amount", 0))
-            sell_lg = safe_float(latest.get("sell_lg_amount", 0))
-            buy_elg = safe_float(latest.get("buy_elg_amount", 0))
-            sell_elg = safe_float(latest.get("sell_elg_amount", 0))
-            big_net = (buy_lg + buy_elg) - (sell_lg + sell_elg)
+        # V2.0盘中方案：从大单代理改为融资余额增速(T-1日margin_detail)
+        # 消除与维度1(大单流入)的共线性，融资增速反映杠杆聪明钱
+        margin_data = []
+        try:
+            resp = call_tushare("margin_detail", token, {"ts_code": code}, "trade_date,ts_code,rzye,rqye,rzmre,rqmcl,rzrqye")
+            items = resp.get("data", {}).get("items", [])
+            fields = resp.get("data", {}).get("fields", [])
+            margin_data = list_to_dict(items, fields)
+        except:
+            pass
+        
+        if margin_data and len(margin_data) >= 5:
+            # 融资持续增长：近5日融资余额连续增长(无单日下降)
+            rzye_list = [safe_float(x.get("rzye", 0)) for x in margin_data[:5]]
+            if all(rzye_list[i] <= rzye_list[i+1] for i in range(len(rzye_list)-1)) and rzye_list[0] > rzye_list[1]:
+                # 按时间降序：[0]最新，连续增长意味着[0]>[1]>[2]>[3]>[4]
+                dim4_score += 3
+                dim4_reason.append(f"[盘中]融资5日连增+3")
             
-            # 大单持续流入：当日大单净流入>0
-            if big_net > 0:
-                dim4_score += 6
-                dim4_reason.append(f"[盘中]大单净流入{big_net/10000:.2f}亿+6")
+            # 融资活跃度：当日融资买入额占成交额比例>8%
+            rzmre = safe_float(margin_data[0].get("rzmre", 0))  # 融资买入额(元)
+            if daily_basic_data and rzmre > 0:
+                # 成交额从moneyflow获取
+                if moneyflow_data:
+                    total_amount = sum([
+                        safe_float(margin_data[0].get("rzmre", 0)),
+                        abs(safe_float(moneyflow_data[0].get("net_mf_amount", 0)))
+                    ])
+                else:
+                    total_amount = rzmre * 10  # 粗估
+                if total_amount > 0:
+                    rz_ratio = rzmre / total_amount * 100
+                    if rz_ratio > 8:
+                        dim4_score += 2
+                        dim4_reason.append(f"[盘中]融资买入占比{rz_ratio:.1f}%+2")
             
-            # 筹码锁定：大单占比稳步提升（用近5日数据判断）
-            if daily_basic_data and len(daily_basic_data) >= 2:
-                cur_turnover = safe_float(daily_basic_data[0].get("turnover_rate", 0))
-                prev_turnover = safe_float(daily_basic_data[1].get("turnover_rate", 0)) if len(daily_basic_data) > 1 else 0
-                if cur_turnover > 0 and prev_turnover > 0 and cur_turnover > prev_turnover * 1.05:
-                    dim4_score += 4
-                    dim4_reason.append(f"[盘中]换手提升+4")
+            # 融资共振：融资余额增速与超大单净流入同向
+            rz_chg = safe_float(margin_data[0].get("rzye", 0)) - safe_float(margin_data[1].get("rzye", 0)) if len(margin_data) > 1 else 0
+            if moneyflow_data:
+                main_net = safe_float(moneyflow_data[0].get("net_mf_amount", 0))
+                if (rz_chg > 0 and main_net > 0) or (rz_chg < 0 and main_net < 0):
+                    dim4_score += 2
+                    dim4_reason.append(f"[盘中]融资主力同向+2")
             
-            # 机构共振：大单与超大单同步加仓
-            if buy_lg > sell_lg and buy_elg > sell_elg:
-                dim4_score += 2
-                dim4_reason.append(f"[盘中]大单+超大单共振+2")
-            
-            # 负向过滤：大单连续净流出
-            if big_net < 0:
-                dim4_score = max(0, dim4_score - 8)
-                dim4_reason.append(f"[盘中]大单净流出-8")
+            # 负向：融资余额连续3日下降
+            if len(margin_data) >= 3:
+                rz_3d = [safe_float(x.get("rzye", 0)) for x in margin_data[:3]]
+                if rz_3d[0] < rz_3d[1] < rz_3d[2]:  # 按时间降序，连续下降
+                    dim4_score -= 5
+                    dim4_reason.append(f"[盘中]融资3日连降-5")
+        elif margin_data:
+            # 数据不足5日
+            dim4_reason.append(f"[盘中]融资数据不足5日")
+        else:
+            dim4_reason.append(f"[盘中]无融资数据")
     else:
         # 盘后方案：Tushare hk_hold
         if hk_hold_data:
@@ -1466,12 +1589,12 @@ def score_fundflow(code):
                     dim4_score += 4
                     dim4_reason.append(f"北向持股{latest_vol/10000:.2f}万股+4")
     
-    dim4_score = max(0, min(12, dim4_score))
+    dim4_score = max(0, min(7, dim4_score))
     score += dim4_score
     if dim4_reason:
-        reason.append(f"[北向{dim4_score}分] {' '.join(dim4_reason)}")
+        reason.append(f"[融资{dim4_score}分] {' '.join(dim4_reason)}")
     
-    # ===== 7. 维度5：筹码抛压与锁仓（8分）=====
+    # ===== 7. 维度5：筹码抛压与锁仓（13分）V2.0: 权重8→13 =====
     dim5_score = 0
     dim5_reason = []
     
@@ -1480,20 +1603,29 @@ def score_fundflow(code):
         net_flows = [safe_float(x.get("net_mf_amount", 0)) for x in moneyflow_data[:3]]
         # 净流入递增 = 锁仓度高（前天<=昨天<=今天）
         if net_flows[2] <= net_flows[1] <= net_flows[0] and net_flows[0] > 0:
-            dim5_score += 5
-            dim5_reason.append(f"流入递增锁仓+5")
+            dim5_score += 7
+            dim5_reason.append(f"流入递增锁仓+7")
         
         # 无大幅流出 = 抛压可控
         if all(n >= 0 for n in net_flows):
             dim5_score += 3
             dim5_reason.append(f"无抛压+3")
+        
+        # V2.0新增：净流入加速（今日>前2日均值1.5倍）
+        if net_flows[0] > 0 and len(net_flows) >= 3:
+            avg_2d = (abs(net_flows[1]) + abs(net_flows[2])) / 2
+            if avg_2d > 0 and net_flows[0] > avg_2d * 1.5:
+                dim5_score += 3
+                dim5_reason.append(f"流入加速+3")
     
-    dim5_score = max(0, min(8, dim5_score))
+    dim5_score = max(0, min(13, dim5_score))
     score += dim5_score
     if dim5_reason:
         reason.append(f"[锁仓{dim5_score}分] {' '.join(dim5_reason)}")
     
     # ===== 8. 返回结果 =====
+    if yiziban_exempt:
+        reason.append("[豁免]一字板跳过散户博弈否决")
     if not reason:
         reason.append("[无] 无明显资金信号")
     
@@ -1512,9 +1644,10 @@ def score_fundflow(code):
 
 def score_sentiment(code):
     """
-    情绪面涨停潜力预判 V1.0
-    五维度量化评分：大盘情绪30分 + 主线题材30分 + 板块梯队20分 + 个股人气15分 + 舆情风向5分
+    情绪面涨停潜力预判 V1.2
+    五维度量化评分：大盘情绪30分 + 主线题材30分 + 板块梯队20分 + 个股人气10分 + 集合竞价15分
     含一票否决规则
+    V1.2变更：CallVolRatio量纲修正(vol/yesterday_vol替代vol/float_share) + OpenGap市场状态乘数
     """
     from datetime import datetime, timedelta
     
@@ -1603,6 +1736,106 @@ def score_sentiment(code):
             for cpt_name in concept_names:
                 if cpt_name not in concept_ul_cnt:
                     concept_ul_cnt[cpt_name] = 0
+    
+    # 1.7 获取个股昨日成交量（CallVolRatio量纲修正，V1.2）
+    yesterday_vol = 0
+    try:
+        end_dt = datetime.now() - timedelta(days=5)  # 往前多取几天确保覆盖周末
+        resp = call_tushare("daily", token, {
+            "ts_code": code,
+            "start_date": end_dt.strftime('%Y%m%d'),
+            "end_date": today_str
+        }, "trade_date,vol")
+        daily_items = resp.get("data", {}).get("items", [])
+        if daily_items and len(daily_items) >= 2:
+            # 取最近一个交易日的成交量作为yesterday_vol（排除当日）
+            # daily接口按日期倒序返回，items[0]是最近的
+            # 如果items[0]日期=today，取items[1]；否则取items[0]
+            d_fields = resp.get("data", {}).get("fields", [])
+            d_dict_list = [dict(zip(d_fields, x)) for x in daily_items if d_fields]
+            for d in d_dict_list:
+                if d.get('trade_date', '') != today_str:
+                    yesterday_vol = safe_float(d.get('vol', 0)) or 0
+                    break
+            # 如果没找到非今日数据，取items[1]（第二近的日期）
+            if yesterday_vol == 0 and len(daily_items) >= 2:
+                vol_val = daily_items[1][1] if len(daily_items[1]) > 1 else 0
+                yesterday_vol = safe_float(vol_val) or 0
+    except Exception:
+        pass
+    
+    # 1.8 市场状态判定（V1.2新增，用于OpenGap乘数）
+    # 基于全市场涨跌家数+成交额判定牛市/震荡/熊市态
+    market_state = "震荡"  # 默认震荡态
+    market_state_multiplier = 1.0  # 默认乘数
+    mkt_advance_decline_ratio = 0
+    try:
+        # 涨跌比：用limit_data中的涨停+跌停数估算（精确值需全市场数据）
+        # 更精确方案：获取上证+深证每日交易统计
+        resp_sh = call_tushare("daily_info", token, {"trade_date": today_str, "ts_code": "SSE"}, "trade_date,ts_code,com_count,amount")
+        sh_data = resp_sh.get("data", {}).get("items", [])
+        resp_sz = call_tushare("daily_info", token, {"trade_date": today_str, "ts_code": "SZSE"}, "trade_date,ts_code,com_count,amount")
+        sz_data = resp_sz.get("data", {}).get("items", [])
+        
+        # 获取20日均成交额（取近20个交易日）
+        mkt_amount_20d_avg = 0
+        resp_info = call_tushare("daily_info", token, {
+            "start_date": (datetime.now() - timedelta(days=30)).strftime('%Y%m%d'),
+            "end_date": today_str
+        }, "trade_date,amount")
+        info_items = resp_info.get("data", {}).get("items", [])
+        if info_items:
+            amounts = []
+            info_fields = resp_info.get("data", {}).get("fields", [])
+            for item in info_items:
+                d = dict(zip(info_fields, item)) if info_fields else {}
+                amt = safe_float(d.get('amount', 0))
+                if amt and amt > 0:
+                    amounts.append(amt)
+            if len(amounts) >= 5:
+                mkt_amount_20d_avg = sum(amounts[-20:]) / len(amounts[-20:])
+        
+        # 计算涨跌比（用涨停跌停家数简化估算）
+        if limit_data:
+            limit_up_cnt_est = len([x for x in limit_data if str(x.get('limit', '')).upper() == 'U'])
+            limit_down_cnt_est = len([x for x in limit_data if str(x.get('limit', '')).upper() == 'D'])
+            # 精确涨跌比需要全市场数据，此处用涨停/跌停比率粗估
+            # 更精确：用daily_info的com_count推算
+            total_com = 0
+            today_amount = 0
+            if sh_data:
+                sh_dict = dict(zip(resp_sh.get("data", {}).get("fields", []), sh_data[0])) if sh_data else {}
+                total_com += safe_int(sh_dict.get('com_count', 0)) or 0
+                today_amount += safe_float(sh_dict.get('amount', 0)) or 0
+            if sz_data:
+                sz_dict = dict(zip(resp_sz.get("data", {}).get("fields", []), sz_data[0])) if sz_data else {}
+                total_com += safe_int(sz_dict.get('com_count', 0)) or 0
+                today_amount += safe_float(sz_dict.get('amount', 0)) or 0
+            
+            # 用涨停跌停数近似涨跌比（涨停数/跌停数，无法获取全市场涨跌家数）
+            # 如果有daily_info数据，可更精确估算（假设涨跌比 ≈ 涨停家数占比高的市场偏暖）
+            if limit_up_cnt_est > 0 and limit_down_cnt_est > 0:
+                mkt_advance_decline_ratio = limit_up_cnt_est / limit_down_cnt_est
+            elif limit_up_cnt_est > 0:
+                mkt_advance_decline_ratio = 3.0  # 无跌停数据时默认偏暖
+            
+            # 判定市场状态
+            amount_ratio = today_amount / mkt_amount_20d_avg if mkt_amount_20d_avg > 0 else 1.0
+            
+            if mkt_advance_decline_ratio > 2.5 and amount_ratio > 1.2:
+                market_state = "牛市"
+                market_state_multiplier = 1.3
+            elif mkt_advance_decline_ratio < 0.8 or amount_ratio < 0.7:
+                market_state = "熊市"
+                market_state_multiplier = 0.6
+            else:
+                market_state = "震荡"
+                market_state_multiplier = 1.0
+            
+            # 限定乘数范围[0.5, 1.5]
+            market_state_multiplier = max(0.5, min(1.5, market_state_multiplier))
+    except Exception:
+        pass
     
     # ===== 2. 一票否决检查 =====
     # 2.1 市场退潮：炸板率>45% 或 涨停数极少
@@ -1871,42 +2104,56 @@ def score_sentiment(code):
             volume_ratio = safe_float(a_dict.get('volume_ratio')) or 0
 
             open_gap = (price - pre_close) / pre_close * 100 if pre_close > 0 else 0
-            call_vol_ratio = vol / float_share * 100 if float_share > 0 else 0
+            # CallVolRatio量纲修正(V1.2)：竞价量/昨日成交量（旧版vol/float_share*100已废弃）
+            call_vol_ratio = vol / yesterday_vol if yesterday_vol > 0 else 0
 
-            # 1. OpenGap 评分 (5分)
+            # 1. OpenGap 评分 (5分) × 市场状态乘数(V1.2)
+            # 基础跳空评分（震荡态参考值）
+            open_gap_base = 0
             if 5 <= open_gap < 8:
-                auction_score += 5
-                auction_reasons.append(f"竞价高开{open_gap:.1f}%+5")
+                open_gap_base = 5
             elif 3 <= open_gap < 5:
-                auction_score += 3
-                auction_reasons.append(f"竞价高开{open_gap:.1f}%+3")
+                open_gap_base = 3
             elif 1 <= open_gap < 3:
-                auction_score += 1
-                auction_reasons.append(f"竞价高开{open_gap:.1f}%+1")
+                open_gap_base = 1
             elif -1 <= open_gap < 1:
-                pass  # 平开 0分
+                open_gap_base = 0  # 平开
             elif -3 <= open_gap < -1:
-                auction_score -= 2
-                auction_reasons.append(f"竞价低开{open_gap:.1f}%-2")
+                open_gap_base = -2
             elif open_gap < -3:
-                auction_score -= 4
-                auction_reasons.append(f"竞价低开{open_gap:.1f}%-4")
+                open_gap_base = -4
             elif open_gap >= 8:
-                # 高开过多，有冲高回落风险，适度加分
-                auction_score += 2
-                auction_reasons.append(f"竞价大幅高开{open_gap:.1f}%+2")
+                open_gap_base = 2  # 大幅高开有冲高回落风险
+            
+            # 牛市态：加分放大，扣分不变；熊市态：加分缩小，扣分放大×1.5
+            if open_gap_base > 0:
+                open_gap_score = round(open_gap_base * market_state_multiplier)
+            elif open_gap_base < 0:
+                # 扣分：牛市不变(×1.0)，熊市放大(×1/multiplier，即÷0.6≈×1.67)
+                bear_penalty_factor = 1.0 / market_state_multiplier if market_state_multiplier < 1.0 else 1.0
+                bear_penalty_factor = min(bear_penalty_factor, 1.5)  # 最大放大1.5倍
+                open_gap_score = round(open_gap_base * bear_penalty_factor)
+            else:
+                open_gap_score = 0
+            
+            # 截断规则
+            open_gap_score = max(0, min(5, open_gap_score))
+            if open_gap_base != 0:
+                gap_state_tag = f"[{market_state}态×{market_state_multiplier}]"
+                auction_reasons.append(f"竞价跳空{open_gap:.1f}%{gap_state_tag}→{open_gap_score}分")
+            auction_score += open_gap_score
 
-            # 2. CallVolRatio 评分 (5分) - 竞价关注度
-            # 需要全市场分位数，简化用绝对阈值
-            if call_vol_ratio >= 5000:  # Top ~1%
+            # 2. CallVolRatio 评分 (5分) - 竞价关注度(V1.2量纲修正)
+            # 新量纲：竞价量/昨日成交量，实际值范围0.3~5.0
+            if call_vol_ratio >= 3.0:  # 竞价量达昨日全天3倍以上
                 auction_score += 5
-                auction_reasons.append(f"竞价关注度极高+5")
-            elif call_vol_ratio >= 1000:  # Top ~5%
+                auction_reasons.append(f"竞价关注度极高(量比{call_vol_ratio:.1f})+5")
+            elif call_vol_ratio >= 1.5:  # 竞价量达昨日全天1.5倍
                 auction_score += 3
-                auction_reasons.append(f"竞价关注度高+3")
-            elif call_vol_ratio >= 300:  # Top ~10%
+                auction_reasons.append(f"竞价关注度高(量比{call_vol_ratio:.1f})+3")
+            elif call_vol_ratio >= 0.5:  # 竞价量达昨日全天半量
                 auction_score += 1
-                auction_reasons.append(f"竞价关注度较高+1")
+                auction_reasons.append(f"竞价关注度较高(量比{call_vol_ratio:.1f})+1")
 
             # 3. 量比验证 (3分)
             if volume_ratio > 5:
@@ -1927,7 +2174,7 @@ def score_sentiment(code):
         pass
 
     score += max(0, min(15, auction_score))
-    reasons.extend(auction_reasons)
+    reasons.extend(auction_reasons[:3])  # V1.2：竞价reason只取前3条，避免reason列表过长
     
     # ===== 4. 综合评定 =====
     final_score = max(0, min(100, score))
@@ -1941,7 +2188,9 @@ def score_sentiment(code):
     else:
         level = "无"
     
-    reason_str = f"[{level}] " + "; ".join(reasons[:5]) if reasons else f"[{level}] 无明显信号"
+    # V1.2：截断从[:5]改为[:8]，确保5个维度都能展示关键reason
+    # 市场状态标签（牛市态/熊市态）在竞价维度reason中，[:5]截断会隐藏竞价维度
+    reason_str = f"[{level}] " + "; ".join(reasons[:8]) if reasons else f"[{level}] 无明显信号"
     
     return final_score, reason_str
 

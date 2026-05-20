@@ -77,26 +77,39 @@
   > 截断规则：FinalScore = max(0, min(2, RawScore))
 > 注：龙虎榜T+1披露，**盘中无法获取**。盘中用「当日涨幅+换手率」代理（游资活跃标的通常高换手+高涨幅）。盘后通过Tushare top_inst统计近3日游资净买入。
 
-【维度5】集合竞价情绪动能（15分）← V1.1新增
-数据来源：Tushare `stk_auction` 接口（开盘竞价成交数据）
-- OpenGap（开盘跳空）：
-  - 高开5-8%：+5分（最佳开盘区间，情绪启动信号）
-  - 高开3-5%：+3分（温和高开，有上攻意愿）
-  - 高开1-3%：+1分（轻微高开，情绪偏暖）
-  - 平开(-1~1%)：0分
-  - 低开1-3%：-2分（情绪偏弱）
-  - 低开>3%：-4分（情绪溃散）
-  - 高开≥8%：+2分（大幅高开有冲高回落风险，适度加分）
+【维度5】集合竞价情绪动能（15分）← V1.2修订（量纲修正+市场状态适配）
+数据来源：Tushare `stk_auction` 接口（开盘竞价成交数据）+ `daily` 接口（昨日成交量）
+
+- OpenGap（开盘跳空）× 市场状态乘数：
+  > 市场状态判定规则（基于全市场涨跌家数+成交额）：
+  - 牛市态：涨跌比>2.5 且 全市场成交额>20日均额1.2倍 → 乘数=1.3（高开是加速信号，放大加分）
+  - 震荡态：涨跌比∈[0.8, 2.5] → 乘数=1.0（中性，原阈值不变）
+  - 熊市态：涨跌比<0.8 或 成交额<20日均额0.7倍 → 乘数=0.6（高开是兑现/核按钮起点，缩小加分/放大扣分）
+  > 乘数范围限定[0.5, 1.5]，防止极端值
+  基础跳空评分（震荡态参考值，实际得分 = 基础分 × 市场乘数）：
+  - 高开5-8%：基础+5分 → 牛市+6.5，震荡+5，熊市+3
+  - 高开3-5%：基础+3分 → 牛市+3.9，震荡+3，熊市+1.8
+  - 高开1-3%：基础+1分 → 牛市+1.3，震荡+1，熊市+0.6
+  - 平开(-1~1%)：0分（不受乘数影响）
+  - 低开1-3%：基础-2分 → 牛市-2（扣分不变），震荡-2，熊市-3（扣分放大×1.5）
+  - 低开>3%：基础-4分 → 牛市-4，震荡-4，熊市-6
+  - 高开≥8%：基础+2分 → 牛市+2.6，震荡+2，熊市+1.2（大幅高开仍有冲高回落风险，适度加分）
+  > 截断规则：FinalScore = max(0, min(5, round(基础分 × 市场乘数)))
+
+- CallVolRatio（竞价关注度）：竞价成交量/昨日成交量（量纲修正，V1.2）
+  > 旧版量纲"竞价成交量/流通股本"已废弃（流通股本量纲下阈值≥5000%逻辑不通，实际值仅0.1~5%范围）
+  > 新量纲"竞价量/昨日成交量"反映竞价相对于全天成交的活跃程度，实际值0.3~5.0范围
+  - ≥3.0（竞价量达昨日全天3倍以上）：+5分（极高关注度，开盘前资金强力动员）
+  - ≥1.5（竞价量达昨日全天1.5倍）：+3分（高关注度）
+  - ≥0.5（竞价量达昨日全天半量）：+1分（较高关注度）
   > 截断规则：FinalScore = max(0, min(5, RawScore))
-- CallVolRatio（竞价关注度）：竞价成交量/流通股本，衡量开盘前资金动员强度
-  - ≥5000%（Top 1%）：+5分（极高关注度）
-  - ≥1000%（Top 5%）：+3分（高关注度）
-  - ≥300%（Top 10%）：+1分（较高关注度）
-  > 截断规则：FinalScore = max(0, min(5, RawScore))
+
 - 量比验证：竞价量比>5得+3分；>3得+1分（确认竞价活跃度非异常）
   > 截断规则：FinalScore = max(0, min(3, RawScore))
+
 - 竞价成交额：竞价成交金额≥500万得+2分；≥100万得+1分（真金白银的参与度）
   > 截断规则：FinalScore = max(0, min(2, RawScore))
+
 > 因子构建标准流程：原始数据 → 去极值(Winsorize 5%/95%) → 横截面分位数 → 信号输出
 > 衰减控制：集合竞价因子半衰期<3个交易日，仅对当日开盘情绪有效
 > 风险过滤：涨停/跌停股竞价量价失真，需结合开板状态判断；ST/新股/停牌股剔除
@@ -108,14 +121,15 @@
 - 题材情绪类：theme_heat_rank, theme_heat_idx, theme_cycle_tag, theme_net_inflow, theme_ul_cnt_trend
 - 板块梯队类：sector_ul_cnt, sector_leader_height, sector_echelon_flag, sector_avg_ret_nonul, sector_divergence_ratio
 - 个股人气类：popularity_rank, hist_ul_cnt_20d, turnover_ratio, intraday_activity_idx
-- 集合竞价类：auction_open_gap, auction_call_vol_ratio, auction_volume_ratio, auction_amount, auction_price, auction_pre_close ← V1.1新增
+- 集合竞价类：auction_open_gap, auction_call_vol_ratio(竞价量/昨日成交量), auction_volume_ratio, auction_amount, auction_price, auction_pre_close, yesterday_vol ← V1.2量纲修正
+- 市场状态类：market_state(牛/震/熊), market_state_multiplier, mkt_advance_decline_ratio, mkt_total_amount, mkt_amount_20d_avg ← V1.2新增
 
 【盘后历史数据（Tushare）】
 - 市场情绪类：limit_up_cnt, limit_down_cnt, board_break_rate, limit_up_premium_yd, max_continuity
 - 题材情绪类：theme_heat_rank, theme_heat_idx, theme_cycle_tag, theme_net_inflow
 - 板块梯队类：sector_ul_cnt, sector_leader_height, sector_echelon_flag
 - 个股人气类：popularity_rank, hist_ul_cnt_20d, turnover_ratio, dragon_tiger_net_buy
-- 集合竞价类：stk_auction 接口字段 (ts_code, trade_date, vol, price, amount, pre_close, turnover_rate, volume_ratio, float_share) ← V1.1新增
+- 集合竞价类：stk_auction 接口字段 (ts_code, trade_date, vol, price, amount, pre_close, turnover_rate, volume_ratio, float_share) + daily 接口昨日成交量(yesterday_vol) ← V1.2量纲修正
 
 注：
 - 盘中字段通过CDP实时获取或akshare stock_fund_flow_individual 代理
