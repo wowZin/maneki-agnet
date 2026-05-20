@@ -16,3 +16,5 @@ google_client_secret.json
 client_secret*.json
 node_modules/
 .DS_Store
+*.pyc
+__pycache__/

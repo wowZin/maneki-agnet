@@ -1,6 +1,7 @@
 """
-技术面评分 V1.0 单元测试
+技术面评分 V1.1 单元测试
 测试 score_technical() 五维度量化评分逻辑
+含V1.0→V1.1阈值调整验证
 """
 import sys
 import os
@@ -163,26 +164,26 @@ class TestTechnicalScoreV1(unittest.TestCase):
         self.assertIn("放量破位", reason)
 
     @patch('requests.post')
-    def test_veto_shrinkage_decline(self, mock_post):
-        """测试一票否决：持续缩量阴跌"""
+    def test_veto_shrinkage_decline_v11(self, mock_post):
+        """V1.1测试：持续缩量阴跌（量比<0.3且累计跌幅>3%才否决）"""
         from scripts.zt_pipeline import score_technical
 
-        # 连续3日量比<0.5且下跌
+        # 3日量比均<0.3, 累计跌幅>3%（-1.5-1.2-0.8=-3.5%）
         day1 = self._make_stock_data(
             close=10.0, open_p=10.2, high=10.3, low=9.9,
-            vol_ratio=0.3, turnover=1.0,
+            vol_ratio=0.25, turnover=1.0,
             ma5=10.2, ma10=10.5, ma20=10.8, ma60=11.0,
             trade_date="20260516", pct_change=-1.5
         )
         day2 = self._make_stock_data(
             close=10.2, open_p=10.3, high=10.4, low=10.1,
-            vol_ratio=0.4, turnover=0.8,
+            vol_ratio=0.2, turnover=0.8,
             ma5=10.3, ma10=10.5, ma20=10.8, ma60=11.0,
             trade_date="20260515", pct_change=-1.2
         )
         day3 = self._make_stock_data(
             close=10.3, open_p=10.4, high=10.5, low=10.2,
-            vol_ratio=0.3, turnover=0.9,
+            vol_ratio=0.28, turnover=0.9,
             ma5=10.4, ma10=10.6, ma20=10.9, ma60=11.0,
             trade_date="20260514", pct_change=-0.8
         )
@@ -197,8 +198,87 @@ class TestTechnicalScoreV1(unittest.TestCase):
 
         score, reason = score_technical("000001.SZ")
 
-        self.assertEqual(score, 0, f"持续缩量阴跌应得0分, 实际={score}")
+        # V1.1: 量比均<0.3且累计跌幅=-3.5%>-3%，应触发否决
+        self.assertEqual(score, 0, f"V1.1缩量阴跌应得0分, 实际={score}")
         self.assertIn("缩量阴跌", reason)
+
+    @patch('requests.post')
+    def test_no_veto_mild_shrinkage_v11(self, mock_post):
+        """V1.1测试：量比<0.5但不<0.3，不再触发否决（偏弱不归零）"""
+        from scripts.zt_pipeline import score_technical
+
+        # 3日量比0.3-0.5之间（V1.0会否决，V1.1不否决）
+        day1 = self._make_stock_data(
+            close=10.0, open_p=10.1, high=10.2, low=9.9,
+            vol_ratio=0.4, turnover=1.0,
+            ma5=10.2, ma10=10.5, ma20=10.8, ma60=11.0,
+            trade_date="20260516", pct_change=-1.0
+        )
+        day2 = self._make_stock_data(
+            close=10.2, open_p=10.3, high=10.4, low=10.1,
+            vol_ratio=0.35, turnover=0.8,
+            ma5=10.3, ma10=10.5, ma20=10.8, ma60=11.0,
+            trade_date="20260515", pct_change=-0.8
+        )
+        day3 = self._make_stock_data(
+            close=10.3, open_p=10.4, high=10.5, low=10.2,
+            vol_ratio=0.45, turnover=0.9,
+            ma5=10.4, ma10=10.6, ma20=10.9, ma60=11.0,
+            trade_date="20260514", pct_change=-0.5
+        )
+
+        factor_resp = self._build_factor_response([day1, day2, day3])
+        mf_resp = self._build_moneyflow_response([])
+
+        mock_post.side_effect = [
+            MagicMock(json=lambda: factor_resp),
+            MagicMock(json=lambda: mf_resp)
+        ]
+
+        score, reason = score_technical("000001.SZ")
+
+        # V1.1: 量比0.4/0.35/0.45均>0.3，不触发否决，得分应>0
+        self.assertGreater(score, 0, f"V1.1偏弱缩量不归零, 得分应>0, 实际={score}")
+        self.assertNotIn("缩量阴跌", reason)
+
+    @patch('requests.post')
+    def test_no_veto_shrinkage_without_large_decline_v11(self, mock_post):
+        """V1.1测试：量比<0.3但累计跌幅不足3%，不否决"""
+        from scripts.zt_pipeline import score_technical
+
+        # 3日量比均<0.3，但累计跌幅仅-1.5%（不满足>3%条件）
+        day1 = self._make_stock_data(
+            close=10.0, open_p=10.1, high=10.2, low=9.9,
+            vol_ratio=0.25, turnover=1.0,
+            ma5=10.2, ma10=10.5, ma20=10.8, ma60=11.0,
+            trade_date="20260516", pct_change=-0.5
+        )
+        day2 = self._make_stock_data(
+            close=10.2, open_p=10.3, high=10.4, low=10.1,
+            vol_ratio=0.2, turnover=0.8,
+            ma5=10.3, ma10=10.5, ma20=10.8, ma60=11.0,
+            trade_date="20260515", pct_change=-0.6
+        )
+        day3 = self._make_stock_data(
+            close=10.3, open_p=10.4, high=10.5, low=10.2,
+            vol_ratio=0.28, turnover=0.9,
+            ma5=10.4, ma10=10.6, ma20=10.9, ma60=11.0,
+            trade_date="20260514", pct_change=-0.4
+        )
+
+        factor_resp = self._build_factor_response([day1, day2, day3])
+        mf_resp = self._build_moneyflow_response([])
+
+        mock_post.side_effect = [
+            MagicMock(json=lambda: factor_resp),
+            MagicMock(json=lambda: mf_resp)
+        ]
+
+        score, reason = score_technical("000001.SZ")
+
+        # V1.1: 累计跌幅=-1.5%，不满足>3%条件，不否决
+        self.assertGreater(score, 0, f"跌幅不足3%不否决, 得分应>0, 实际={score}")
+        self.assertNotIn("缩量阴跌", reason)
 
     @patch('requests.post')
     def test_bearish_stock(self, mock_post):
@@ -375,6 +455,426 @@ class TestTechnicalScoreV1(unittest.TestCase):
         score, reason = score_technical("000001.SZ")
 
         self.assertIn("洗盘起爆", reason, f"应检测到洗盘起爆信号, reason={reason}")
+
+    # ===== V1.1 新增测试 =====
+
+    @patch('requests.post')
+    def test_deduct_low_vol_ratio_no_penalty_v11(self, mock_post):
+        """V1.1测试：量比<1.5不扣分，仅不加分"""
+        from scripts.zt_pipeline import score_technical
+
+        # 量比=1.2（<1.5但>0），不加分也不扣分
+        day1 = self._make_stock_data(
+            close=11.0, open_p=10.8, high=11.2, low=10.7,
+            vol_ratio=1.2, turnover=4.0,
+            ma5=10.9, ma10=10.8, ma20=10.5, ma60=10.2,
+            trade_date="20260516"
+        )
+        day2 = self._make_stock_data(
+            close=10.9, open_p=10.8, high=11.0, low=10.7,
+            vol_ratio=1.1, turnover=3.5,
+            ma5=10.8, ma10=10.7, ma20=10.5, ma60=10.2,
+            trade_date="20260515"
+        )
+        day3 = self._make_stock_data(
+            close=10.8, open_p=10.7, high=10.9, low=10.6,
+            vol_ratio=1.0, turnover=3.0,
+            ma5=10.7, ma10=10.6, ma20=10.4, ma60=10.1,
+            trade_date="20260514"
+        )
+
+        factor_resp = self._build_factor_response([day1, day2, day3])
+        mf_resp = self._build_moneyflow_response([])
+
+        mock_post.side_effect = [
+            MagicMock(json=lambda: factor_resp),
+            MagicMock(json=lambda: mf_resp)
+        ]
+
+        score, reason = score_technical("000001.SZ")
+
+        # V1.1: 量比<1.5不扣分，得分应>0（偏弱不归零）
+        self.assertGreater(score, 0, f"量比偏低不扣分, 得分应>0, 实际={score}")
+        # reason应包含"不加分"标识而非扣分
+        if "量比" in reason:
+            self.assertIn("不加分", reason, f"量比<1.5应标注'不加分'而非扣分, reason={reason}")
+
+    @patch('requests.post')
+    def test_deduct_abnormal_volume_v11(self, mock_post):
+        """V1.1测试：量比>6.0扣5分（而非V1.0的10分）"""
+        from scripts.zt_pipeline import score_technical
+
+        # 量比=8.0（异常放量）
+        day1 = self._make_stock_data(
+            close=11.0, open_p=10.5, high=11.5, low=10.3,
+            vol_ratio=8.0, turnover=5.0,
+            ma5=10.9, ma10=10.8, ma20=10.5, ma60=10.2,
+            boll_upper=11.5, boll_mid=10.8, boll_lower=10.1,
+            trade_date="20260516"
+        )
+        day2 = self._make_stock_data(
+            close=10.9, open_p=10.8, high=11.0, low=10.7,
+            vol_ratio=1.5, turnover=3.5,
+            ma5=10.8, ma10=10.7, ma20=10.5, ma60=10.2,
+            trade_date="20260515"
+        )
+        day3 = self._make_stock_data(
+            close=10.8, open_p=10.7, high=10.9, low=10.6,
+            vol_ratio=1.0, turnover=3.0,
+            ma5=10.7, ma10=10.6, ma20=10.4, ma60=10.1,
+            trade_date="20260514"
+        )
+
+        factor_resp = self._build_factor_response([day1, day2, day3])
+        mf_resp = self._build_moneyflow_response([])
+
+        mock_post.side_effect = [
+            MagicMock(json=lambda: factor_resp),
+            MagicMock(json=lambda: mf_resp)
+        ]
+
+        score, reason = score_technical("000001.SZ")
+
+        # reason应包含"-5"扣分标识
+        self.assertIn("-5", reason, f"V1.1量比异常应扣5分, reason={reason}")
+
+    @patch('requests.post')
+    def test_deduct_turnover_weak_v11(self, mock_post):
+        """V1.1测试：换手率<1.5%扣5分（而非V1.0的10分）"""
+        from scripts.zt_pipeline import score_technical
+
+        # 换手率=1.0%（无量拉升）
+        day1 = self._make_stock_data(
+            close=11.0, open_p=10.8, high=11.2, low=10.7,
+            vol_ratio=2.0, turnover=1.0,
+            ma5=10.9, ma10=10.8, ma20=10.5, ma60=10.2,
+            boll_upper=11.3, boll_mid=10.8, boll_lower=10.3,
+            trade_date="20260516"
+        )
+        day2 = self._make_stock_data(
+            close=10.9, open_p=10.8, high=11.0, low=10.7,
+            vol_ratio=1.5, turnover=2.0,
+            ma5=10.8, ma10=10.7, ma20=10.5, ma60=10.2,
+            trade_date="20260515"
+        )
+        day3 = self._make_stock_data(
+            close=10.8, open_p=10.7, high=10.9, low=10.6,
+            vol_ratio=1.0, turnover=2.5,
+            ma5=10.7, ma10=10.6, ma20=10.4, ma60=10.1,
+            trade_date="20260514"
+        )
+
+        factor_resp = self._build_factor_response([day1, day2, day3])
+        mf_resp = self._build_moneyflow_response([])
+
+        mock_post.side_effect = [
+            MagicMock(json=lambda: factor_resp),
+            MagicMock(json=lambda: mf_resp)
+        ]
+
+        score, reason = score_technical("000001.SZ")
+
+        # reason应包含"-5"扣分（V1.1换手率无量扣5分）
+        self.assertIn("-5", reason, f"V1.1无量拉升应扣5分, reason={reason}")
+
+    @patch('requests.post')
+    def test_deduct_bearish_trend_v11(self, mock_post):
+        """V1.1测试：均线空头扣10分而非15分"""
+        from scripts.zt_pipeline import score_technical
+
+        # 均线空头排列: MA5<MA10<MA20
+        day1 = self._make_stock_data(
+            close=10.0, open_p=10.1, high=10.2, low=9.8,
+            vol_ratio=1.5, turnover=3.0,
+            ma5=10.1, ma10=10.3, ma20=10.6, ma60=11.0,
+            boll_upper=10.8, boll_mid=10.3, boll_lower=9.8,
+            trade_date="20260516"
+        )
+        day2 = self._make_stock_data(
+            close=10.1, open_p=10.2, high=10.3, low=10.0,
+            vol_ratio=1.2, turnover=2.5,
+            ma5=10.2, ma10=10.3, ma20=10.6, ma60=11.0,
+            boll_upper=10.8, boll_mid=10.3, boll_lower=9.8,
+            trade_date="20260515"
+        )
+        day3 = self._make_stock_data(
+            close=10.2, open_p=10.3, high=10.4, low=10.1,
+            vol_ratio=1.0, turnover=2.0,
+            ma5=10.3, ma10=10.4, ma20=10.6, ma60=11.0,
+            boll_upper=10.8, boll_mid=10.3, boll_lower=9.8,
+            trade_date="20260514"
+        )
+
+        factor_resp = self._build_factor_response([day1, day2, day3])
+        mf_resp = self._build_moneyflow_response([])
+
+        mock_post.side_effect = [
+            MagicMock(json=lambda: factor_resp),
+            MagicMock(json=lambda: mf_resp)
+        ]
+
+        score, reason = score_technical("000001.SZ")
+
+        # V1.1: 空头排列扣10分而非15分，得分应>0（偏弱不归零）
+        self.assertGreater(score, 0, f"V1.1空头扣10分不归零, 得分应>0, 实际={score}")
+        self.assertIn("-10", reason, f"V1.1空头排列应扣10分, reason={reason}")
+
+    @patch('requests.post')
+    def test_chip_dispersion_deduct_v11(self, mock_post):
+        """V1.1测试：筹码发散扣5分而非10分"""
+        from scripts.zt_pipeline import score_technical
+
+        # BOLL带宽>25%表示筹码发散
+        day1 = self._make_stock_data(
+            close=10.0, open_p=10.1, high=10.2, low=9.8,
+            vol_ratio=2.0, turnover=5.0,
+            ma5=10.1, ma10=10.0, ma20=9.9, ma60=9.8,
+            # boll_mid=10.0, bandwidth=(10.5-9.5)/10=10%，需>25%
+            boll_upper=13.0, boll_mid=10.0, boll_lower=7.0,
+            # bandwidth=(13-7)/10=60% > 25%
+            trade_date="20260516"
+        )
+        day2 = self._make_stock_data(
+            close=10.1, open_p=10.0, high=10.3, low=9.9,
+            vol_ratio=1.5, turnover=3.0,
+            ma5=10.0, ma10=9.9, ma20=9.8, ma60=9.7,
+            boll_upper=12.5, boll_mid=10.0, boll_lower=7.5,
+            trade_date="20260515"
+        )
+        day3 = self._make_stock_data(
+            close=10.2, open_p=10.1, high=10.4, low=10.0,
+            vol_ratio=1.0, turnover=2.0,
+            ma5=10.1, ma10=10.0, ma20=9.9, ma60=9.8,
+            boll_upper=12.0, boll_mid=10.0, boll_lower=8.0,
+            trade_date="20260514"
+        )
+
+        factor_resp = self._build_factor_response([day1, day2, day3])
+        mf_resp = self._build_moneyflow_response([])
+
+        mock_post.side_effect = [
+            MagicMock(json=lambda: factor_resp),
+            MagicMock(json=lambda: mf_resp)
+        ]
+
+        score, reason = score_technical("000001.SZ")
+
+        # V1.1: 筹码发散扣5分
+        self.assertIn("-5", reason, f"V1.1筹码发散应扣5分, reason={reason}")
+
+    @patch('requests.post')
+    def test_veto_chip_boll_width_50_v11(self, mock_post):
+        """V1.1测试：BOLL代理筹码发散否决阈值从30%放宽至50%"""
+        from scripts.zt_pipeline import score_technical
+
+        # BOLL带宽=40%（V1.0会否决，V1.1不否决）
+        day1 = self._make_stock_data(
+            close=10.0, open_p=10.5, high=10.8, low=9.5,
+            vol_ratio=2.0, turnover=5.0,
+            ma5=10.5, ma10=10.3, ma20=10.0, ma60=9.8,
+            boll_upper=12.0, boll_mid=10.0, boll_lower=8.0,
+            # bandwidth=(12-8)/10=40%
+            trade_date="20260516"
+        )
+        day2 = self._make_stock_data(
+            close=10.1, open_p=10.2, high=10.5, low=9.8,
+            vol_ratio=1.5, turnover=3.0,
+            ma5=10.2, ma10=10.1, ma20=9.9, ma60=9.7,
+            boll_upper=11.5, boll_mid=10.0, boll_lower=8.5,
+            trade_date="20260515"
+        )
+        day3 = self._make_stock_data(
+            close=10.2, open_p=10.3, high=10.6, low=9.9,
+            vol_ratio=1.0, turnover=2.0,
+            ma5=10.1, ma10=10.0, ma20=9.8, ma60=9.6,
+            boll_upper=11.0, boll_mid=10.0, boll_lower=9.0,
+            trade_date="20260514"
+        )
+
+        factor_resp = self._build_factor_response([day1, day2, day3])
+        mf_resp = self._build_moneyflow_response([])
+
+        mock_post.side_effect = [
+            MagicMock(json=lambda: factor_resp),
+            MagicMock(json=lambda: mf_resp)
+        ]
+
+        score, reason = score_technical("000001.SZ")
+
+        # V1.1: BOLL带宽40%不触发否决（阈值50%），得分应>0
+        self.assertGreater(score, 0, f"V1.1 BOLL带宽40%不否决, 得分应>0, 实际={score}")
+
+    @patch('requests.post')
+    def test_ma60_decline_deduct_v11(self, mock_post):
+        """V1.1测试：MA60下倾扣5分而非10分"""
+        from scripts.zt_pipeline import score_technical
+
+        # MA60下倾: 今日MA60<5日前MA60
+        day1 = self._make_stock_data(
+            close=11.0, open_p=10.8, high=11.2, low=10.7,
+            vol_ratio=2.0, turnover=5.0,
+            ma5=10.9, ma10=10.8, ma20=10.5, ma60=10.0,
+            boll_upper=11.5, boll_mid=10.8, boll_lower=10.1,
+            trade_date="20260516"
+        )
+        day2 = self._make_stock_data(
+            close=10.9, open_p=10.8, high=11.0, low=10.7,
+            vol_ratio=1.5, turnover=3.5,
+            ma5=10.8, ma10=10.7, ma20=10.5, ma60=10.0,
+            trade_date="20260515"
+        )
+        day3 = self._make_stock_data(
+            close=10.8, open_p=10.7, high=10.9, low=10.6,
+            vol_ratio=1.0, turnover=3.0,
+            ma5=10.7, ma10=10.6, ma20=10.4, ma60=10.0,
+            trade_date="20260514"
+        )
+        day4 = self._make_stock_data(
+            close=10.7, open_p=10.6, high=10.8, low=10.5,
+            vol_ratio=0.9, turnover=2.5,
+            ma5=10.6, ma10=10.5, ma20=10.3, ma60=10.1,
+            trade_date="20260513"
+        )
+        day5 = self._make_stock_data(
+            close=10.6, open_p=10.5, high=10.7, low=10.4,
+            vol_ratio=0.8, turnover=2.0,
+            ma5=10.5, ma10=10.4, ma20=10.2, ma60=10.2,
+            trade_date="20260512"
+        )
+
+        factor_resp = self._build_factor_response([day1, day2, day3, day4, day5])
+        mf_resp = self._build_moneyflow_response([])
+
+        mock_post.side_effect = [
+            MagicMock(json=lambda: factor_resp),
+            MagicMock(json=lambda: mf_resp)
+        ]
+
+        score, reason = score_technical("000001.SZ")
+
+        # V1.1: MA60下倾扣5分
+        if "MA60下倾" in reason:
+            self.assertIn("-5", reason, f"V1.1 MA60下倾应扣5分, reason={reason}")
+
+
+class TestTechnicalAgentV11(unittest.TestCase):
+    """测试 technical_agent.py 的 V1.1 修改"""
+
+    def setUp(self):
+        from scripts.zt_pipeline import clear_tushare_cache
+        clear_tushare_cache()
+
+    def _make_factor_row(self, close=10.0, open_p=10.1, high=10.2, low=9.9,
+                          vol_ratio=1.5, turnover=3.0, pct_change=1.0,
+                          ma5=10.1, ma10=10.0, ma20=9.9, ma60=9.8,
+                          boll_upper=10.5, boll_mid=10.0, boll_lower=9.5,
+                          vol=100000, amount=5000000):
+        """构建单日因子数据字典"""
+        return {
+            'close': close, 'open': open_p, 'high': high, 'low': low,
+            'vol_ratio': vol_ratio, 'turnover_rate': turnover,
+            'pct_change': pct_change,
+            'ma_bfq_5': ma5, 'ma_bfq_10': ma10, 'ma_bfq_20': ma20,
+            'ma_bfq_60': ma60,
+            'boll_upper_bfq': boll_upper, 'boll_mid_bfq': boll_mid,
+            'boll_lower_bfq': boll_lower,
+            'vol': vol, 'amount': amount,
+            'macd_dif_bfq': 0.1, 'macd_dea_bfq': 0.05, 'macd_bfq': 0.05,
+            'kdj_k_bfq': 50, 'kdj_d_bfq': 45, 'rsi_bfq_6': 55,
+        }
+
+    def test_veto_shrinkage_v11_strict(self):
+        """V1.1否决4: 量比<0.3+跌幅>3%才否决"""
+        from scripts.agents.technical_agent import check_veto_rules
+
+        # 量比均<0.3, 累计跌幅>3% → 应否决
+        factors = [
+            self._make_factor_row(vol_ratio=0.25, pct_change=-1.5, close=9.85),
+            self._make_factor_row(vol_ratio=0.2, pct_change=-1.2, close=10.0),
+            self._make_factor_row(vol_ratio=0.28, pct_change=-0.8, close=10.15),
+        ]
+        daily = []
+        mf = []
+
+        is_vetoed, flags = check_veto_rules(factors, daily, mf)
+        self.assertTrue(is_vetoed, f"量比<0.3+跌幅>3%应否决, flags={flags}")
+        self.assertIn("缩量阴跌", flags[0])
+
+    def test_veto_shrinkage_v11_mild_not_vetoed(self):
+        """V1.1否决4: 量比0.3-0.5之间不否决"""
+        from scripts.agents.technical_agent import check_veto_rules
+
+        # 量比0.4（V1.0否决，V1.1不否决）
+        factors = [
+            self._make_factor_row(vol_ratio=0.4, pct_change=-0.5),
+            self._make_factor_row(vol_ratio=0.35, pct_change=-0.6),
+            self._make_factor_row(vol_ratio=0.45, pct_change=-0.4),
+        ]
+        daily = []
+        mf = []
+
+        is_vetoed, flags = check_veto_rules(factors, daily, mf)
+        self.assertFalse(is_vetoed, f"量比0.4不应否决(V1.1), flags={flags}")
+
+    def test_veto_chip_boll_50_threshold(self):
+        """V1.1否决3: BOLL带宽>50%才否决（从30%放宽）"""
+        from scripts.agents.technical_agent import check_veto_rules
+
+        # BOLL带宽=40%（不否决）
+        factors = [
+            self._make_factor_row(boll_upper=12.0, boll_mid=10.0, boll_lower=8.0),
+            self._make_factor_row(boll_upper=11.5, boll_mid=10.0, boll_lower=8.5),
+        ]
+        daily = []
+        mf = []
+
+        is_vetoed, flags = check_veto_rules(factors, daily, mf)
+        self.assertFalse(is_vetoed, f"BOLL带宽40%不应否决(V1.1), flags={flags}")
+
+    def test_veto_chip_boll_over_50(self):
+        """V1.1否决3: BOLL带宽>50%应否决"""
+        from scripts.agents.technical_agent import check_veto_rules
+
+        # BOLL带宽=60%（应否决）
+        factors = [
+            self._make_factor_row(boll_upper=13.0, boll_mid=10.0, boll_lower=7.0),
+            self._make_factor_row(boll_upper=12.5, boll_mid=10.0, boll_lower=7.5),
+        ]
+        daily = []
+        mf = []
+
+        is_vetoed, flags = check_veto_rules(factors, daily, mf)
+        self.assertTrue(is_vetoed, f"BOLL带宽60%应否决(V1.1), flags={flags}")
+        self.assertIn("筹码发散", flags[0])
+        self.assertIn("50%", flags[0])
+
+    def test_score_deduct_turnover_weak_v11(self):
+        """V1.1评分: 换手率<1.5%扣5分而非10分"""
+        from scripts.agents.technical_agent import calculate_volume_score
+
+        # 换手率=1.0%（无量拉升）
+        today = self._make_factor_row(turnover=1.0, vol_ratio=2.0)
+        yesterday = self._make_factor_row(turnover=2.0, vol_ratio=1.5)
+        day_before = self._make_factor_row(turnover=2.5, vol_ratio=1.0)
+
+        score, reasons = calculate_volume_score(today, yesterday, day_before)
+
+        # V1.1: 无量拉升扣5分
+        has_minus_5 = any("-5分" in r for r in reasons)
+        self.assertTrue(has_minus_5, f"换手率1.0%应扣5分, reasons={reasons}")
+
+    def test_score_deduct_bearish_v11(self):
+        """V1.1评分: 均线空头扣10分而非15分"""
+        from scripts.agents.technical_agent import calculate_trend_score
+
+        # 均线空头: MA5<MA10<MA20
+        factors = [self._make_factor_row(ma5=10.1, ma10=10.3, ma20=10.6, ma60=11.0)]
+
+        score, reasons = calculate_trend_score(factors)
+
+        # V1.1: 空头排列扣10分
+        has_minus_10 = any("-10分" in r for r in reasons)
+        self.assertTrue(has_minus_10, f"V1.1空头排列应扣10分, reasons={reasons}")
 
 
 if __name__ == '__main__':

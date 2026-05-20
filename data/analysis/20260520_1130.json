@@ -1,0 +1,86 @@
+[
+  {
+    "code": "600338.SH",
+    "name": "西藏珠峰",
+    "scores": {
+      "fundamental": 93.0,
+      "technical": 0,
+      "fundflow": 0,
+      "sentiment": 11
+    },
+    "reasons": {
+      "fundamental": "[高] ROE=12.6%; 扣非净利+43%; 营收+48%; 7个概念; 股东户数-15.3%",
+      "technical": "筹码高位发散:获利盘仅5.6%",
+      "fundflow": "否决: 纯散户博弈:主力净占比-4.8%<10%",
+      "sentiment": "[无] 7概念+5; 20日涨停2次+3; 竞价关注度较高(量比0.6)+1; 竞价成交895万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 26.0,
+    "resonance": {
+      "count": 1,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002812.SZ",
+    "name": "恩捷股份",
+    "scores": {
+      "fundamental": 69.0,
+      "technical": 0,
+      "fundflow": 23,
+      "sentiment": 10
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=0.6%偏低; 扣非净利+794%; 营收+43%; 10个概念; 股东户数+9.4%",
+      "technical": "持续缩量阴跌:连续3日缩量下跌",
+      "fundflow": "[无] [主力0分] 主力净流入0.00%-5; [龙虎3分] [盘中]封单679.5%流通市值+10 [盘中]开板31次-7; [盘口16分] 净流入1.11亿+10 换手4.1%+6; [融资4分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2",
+      "sentiment": "[无] 10概念+8; 竞价成交856万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 25.5,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603399.SH",
+    "name": "永杉锂业",
+    "scores": {
+      "fundamental": 68.0,
+      "technical": 0,
+      "fundflow": 0,
+      "sentiment": 13
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=-20.6%偏低; 扣非净利+621%; 营收+90%; 7个概念; 股东户数+15.7%",
+      "technical": "筹码高位发散:获利盘仅21.5%",
+      "fundflow": "否决: 纯散户博弈:主力净占比-25.3%<10%",
+      "sentiment": "[无] 7概念+5; 换手15.4%情绪活跃+2; 20日涨停4次+3; 竞价跳空-2.4%[震荡态×1.0]→0分; 竞价关注度较高(量比0.9)+1; 竞价成交1280万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 20.25,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  }
+]

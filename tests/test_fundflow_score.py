@@ -1,6 +1,7 @@
 """
-资金面评分 V2.0 单元测试
+资金面评分 V2.1 单元测试
 测试 score_fundflow() 五维度量化评分逻辑
+V2.1变更：否决4阈值10%→5%(5%-10%转维度1扣分)，维1规模偏弱-5→-15，维1占比细化(5%-15%-5分)
 V2.0变更：维2盘中→封板质量因子，维4盘中→融资余额增速，维4权重12→7，维5权重8→13，否决调节器/豁免
 """
 import sys
@@ -136,9 +137,11 @@ class TestFundflowVeto(TestFundflowScoreV1):
 
     @patch('scripts.zt_pipeline.requests.post')
     def test_veto_pure_retail(self, mock_post):
-        """否决规则2: 主力净占比 < 10%"""
+        """否决规则4(V2.1): 主力净占比 < 5%才否决(从10%放宽)"""
+        # 构造主力净占比 < 5%的数据（更极端的散户博弈）
+        # 买入5+卖出5=10总量，净额=0，占比=0% < 5%
         moneyflow_items = [
-            ["20260516", 100, 10, 100, 9, 200, 200, 100, 199, 300, 2]
+            ["20260516", 100, 5, 100, 5, 200, 5, 100, 5, 300, 0]
         ]
         daily_items = self._build_daily_basic_items(circ_mv=1000, turnover_rate=5)
 
@@ -155,6 +158,7 @@ class TestFundflowVeto(TestFundflowScoreV1):
         score, reason = score_fundflow("600000.SH")
         self.assertEqual(score, 0)
         self.assertIn("否决", reason)
+        self.assertIn("<5%", reason)
 
     @patch('scripts.zt_pipeline.requests.post')
     def test_veto_dragon_tiger_massive_sell(self, mock_post):
@@ -188,9 +192,13 @@ class TestFundflowDimensions(TestFundflowScoreV1):
 
     @patch('scripts.zt_pipeline.requests.post')
     def test_strong_main_inflow(self, mock_post):
-        """测试维度1: 强主力流入 → 高分"""
+        """测试维度1: 强主力流入 → 高分(V2.1含占比偏弱扣分)"""
+        # 主力净额=(5000-1000)+(3000-500)=6500(元)
+        # 需要主力净流入≥0.3%流通市值：circ_mv*10000(元)需要≤6500/0.003≈2.17M
+        # 取circ_mv=200万→流通市值=2M元→比例=6500/2M=0.325%>0.3%
+        # 占比: 6500/(5000+1000+3000+500)=68.4%>30%→+10分
         moneyflow_items = self._build_moneyflow_items(5000, 1000, 3000, 500, 6500, days=3)
-        daily_items = self._build_daily_basic_items(circ_mv=100000, turnover_rate=8)
+        daily_items = self._build_daily_basic_items(circ_mv=200, turnover_rate=8)
 
         responses = {
             "moneyflow": _build_tushare_response(moneyflow_items,
@@ -322,10 +330,10 @@ class TestFundflowDimensions(TestFundflowScoreV1):
 
     @patch('scripts.zt_pipeline.requests.post')
     def test_retail_trap_detected(self, mock_post):
-        """测试散户接盘: 主力流出但总净流入为正"""
-        # 超大单占比<5%，主力净占比<10% → 触发否决
+        """测试散户接盘: 主力流出但总净流入为正(V2.1: 占比<5%仍触发否决)"""
+        # 超大单净占比=0%（5-5=0），<5% → 触发否决
         moneyflow_items = [
-            ["20260516", 100, 40, 100, 50, 200, 800, 100, 1000, 300, 500]
+            ["20260516", 100, 5, 100, 5, 200, 5, 100, 5, 300, 0]
         ]
         daily_items = self._build_daily_basic_items(circ_mv=100000, turnover_rate=8)
 
@@ -344,11 +352,11 @@ class TestFundflowDimensions(TestFundflowScoreV1):
 
 
 class TestFundflowV2Features(TestFundflowScoreV1):
-    """V2.0新增特性测试"""
+    """V2.0/V2.1新增特性测试"""
 
     @patch('scripts.zt_pipeline.requests.post')
     def test_yiziban_veto_exemption(self, mock_post):
-        """V2.0: 一字板豁免否决2.2(纯散户博弈)"""
+        """V2.0: 一字板豁免否决4(纯散户博弈)"""
         # 一字板: pct_chg=10%, open_times=0 → 豁免否决
         # 但主力净占比<10%且超大单占比<5% → 正常应触发否决
         # 一字板时跳过否决，不返回0分
@@ -465,6 +473,66 @@ class TestFundflowV2Features(TestFundflowScoreV1):
             dim5_score = int(match.group(1))
             self.assertLessEqual(dim5_score, 13, f"V2.0维度5上限应为13，实际{dim5_score}")
             self.assertGreater(dim5_score, 8, f"V2.0维度5应>8分(含加速+3)，实际{dim5_score}")
+
+    # ===== V2.1新增测试 =====
+
+    @patch('scripts.zt_pipeline.requests.post')
+    def test_v21_veto4_threshold_relaxed(self, mock_post):
+        """V2.1: 主力占比5%-10%不触发否决，转入维度1扣分"""
+        # 构造主力净占比=8%的数据（在5%-10%区间）
+        # 总买卖量: buy_elg=100, sell_elg=80, buy_lg=200, sell_lg=180
+        # 净额: (100-80)+(200-180)=40, 总量: 100+80+200+180=560
+        # 占比: 40/560=7.14% → 不触发否决，但在维度1扣5分
+        moneyflow_items = [
+            ["20260516", 100, 100, 100, 80, 200, 200, 200, 180, 300, 40]
+        ]
+        daily_items = self._build_daily_basic_items(circ_mv=100000, turnover_rate=8)
+
+        responses = {
+            "moneyflow": _build_tushare_response(moneyflow_items,
+                ["trade_date","buy_elg_vol","buy_elg_amount","sell_elg_vol","sell_elg_amount",
+                 "buy_lg_vol","buy_lg_amount","sell_lg_vol","sell_lg_amount","net_mf_vol","net_mf_amount"]),
+            "daily_basic": _build_tushare_response(daily_items,
+                ["trade_date","ts_code","close","turnover_rate","turnover_rate_f","volume_ratio","total_mv","circ_mv"]),
+        }
+        mock_post.side_effect = self._mock_requests_post(responses)
+
+        from scripts.zt_pipeline import score_fundflow
+        score, reason = score_fundflow("600000.SH")
+        # 5%-10%不应否决（score>0）
+        self.assertGreater(score, 0, f"主力占比5%-10%不应否决，实际得分{score}, 原因: {reason}")
+        # 应在维度1扣5分(偏弱)
+        self.assertIn("占比偏弱", reason)
+
+    @patch('scripts.zt_pipeline.requests.post')
+    def test_v21_dim1_weak_scale_deduct_15(self, mock_post):
+        """V2.1: 维度1规模偏弱扣分从-5修正为-15"""
+        # 主力净流入占比很小(<0.1%流通市值) → 扣15分(修正自-5)
+        # 但主力占比需>5%避免否决4
+        # 构造: buy_elg=100, sell_elg=50 → 净elg=50
+        # buy_lg=100, sell_lg=70 → 净lg=30
+        # 主力净额=80(元), 总量=320 → 占比=80/320=25%>5%不否决
+        # circ_mv=100000万→流通市值=1G元，80/1G=0.000008%<<0.1% → 扣15分
+        moneyflow_items = [
+            ["20260516", 100, 100, 100, 50, 200, 100, 200, 70, 300, 80]
+        ]
+        daily_items = self._build_daily_basic_items(circ_mv=100000, turnover_rate=8)
+
+        responses = {
+            "moneyflow": _build_tushare_response(moneyflow_items,
+                ["trade_date","buy_elg_vol","buy_elg_amount","sell_elg_vol","sell_elg_amount",
+                 "buy_lg_vol","buy_lg_amount","sell_lg_vol","sell_lg_amount","net_mf_vol","net_mf_amount"]),
+            "daily_basic": _build_tushare_response(daily_items,
+                ["trade_date","ts_code","close","turnover_rate","turnover_rate_f","volume_ratio","total_mv","circ_mv"]),
+        }
+        mock_post.side_effect = self._mock_requests_post(responses)
+
+        from scripts.zt_pipeline import score_fundflow
+        score, reason = score_fundflow("600000.SH")
+        # 不应被否决(占比>5%)
+        self.assertGreater(score, 0, f"主力占比>5%不应否决，实际得分{score}, 原因: {reason}")
+        # 主力维度应包含-15扣分标记(规模偏弱)
+        self.assertIn("-15", reason)
 
 
 if __name__ == '__main__':

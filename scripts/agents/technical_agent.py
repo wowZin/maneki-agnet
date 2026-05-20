@@ -175,26 +175,26 @@ def check_veto_rules(factor_data: List[dict], daily_data: List[dict], moneyflow_
             if body > 0 and upper_shadow / body > 1.5:
                 veto_flags.append(f"高位滞涨:阶段涨幅{stage_gain:.1f}%,换手{turnover:.1f}%,长上影")
     
-    # 3. 筹码高位发散：上方套牢盘比例>60%或集中度扩大>30%
-    # 简化判断：用布林带宽度判断筹码发散
+    # 3. 筹码高位发散：BOLL带宽>50%视为极端发散（V1.1: 从30%放宽至50%）
     boll_upper = safe_float(today.get('boll_upper_bfq'))
     boll_lower = safe_float(today.get('boll_lower_bfq'))
     boll_mid = safe_float(today.get('boll_mid_bfq'))
     
     if boll_upper and boll_lower and boll_mid and boll_mid > 0:
         boll_width = (boll_upper - boll_lower) / boll_mid * 100
-        # 布林带宽过大表示筹码发散
-        if boll_width > 30:  # 经验阈值
-            veto_flags.append(f"筹码发散:布林带宽{boll_width:.1f}%")
+        if boll_width > 50:  # V1.1: 从30放宽至50
+            veto_flags.append(f"筹码发散:布林带宽{boll_width:.1f}%>50%")
     
-    # 4. 持续缩量阴跌：连续3日成交量<近20日均量50%，股价下移
+    # 4. 持续缩量阴跌：连续3日量比<0.3且累计跌幅>3%（V1.1: 从量比<0.5放宽至<0.3，新增跌幅>3%）
     if len(factor_data) >= 3:
         vol_ratios = [safe_float(factor_data[i].get('vol_ratio')) for i in range(3)]
         pct_changes = [safe_float(factor_data[i].get('pct_change')) for i in range(3)]
         
-        if all(vr and vr < 0.5 for vr in vol_ratios):
-            if all(pc and pc < 0 for pc in pct_changes):
-                veto_flags.append(f"持续缩量阴跌:连续3日量比{vol_ratios}均<0.5且下跌")
+        valid_vr = [vr for vr in vol_ratios if vr]
+        valid_pc = [pc for pc in pct_changes if pc]
+        if len(valid_vr) == 3 and all(vr < 0.3 for vr in valid_vr):
+            if len(valid_pc) == 3 and sum(valid_pc) < -3:
+                veto_flags.append(f"持续缩量阴跌:3日量比均<0.3,累计跌{sum(valid_pc):.1f}%>3%")
     
     # 5. 资金持续出逃：近2日主力净流入累计为负
     if len(moneyflow_data) >= 2:
@@ -244,22 +244,25 @@ def calc_volume_score(factor_data: List[dict], daily_basic: Optional[dict]) -> T
             score += 15
             reasons.append(f"量比={vol_ratio:.2f}∈[1.8,4.0]+15分")
         elif vol_ratio < 1.5:
-            reasons.append(f"量比={vol_ratio:.2f}<1.5缩量")
+            # V1.1: 量比<1.5不再扣分，仅不加分
+            reasons.append(f"量比={vol_ratio:.2f}<1.5缩量(不加分)")
         elif vol_ratio > 6.0:
-            reasons.append(f"量比={vol_ratio:.2f}>6.0异常放量")
+            # V1.1: 异常放量扣5分而非0分
+            score -= 5
+            reasons.append(f"量比={vol_ratio:.2f}>6.0异常放量-5分")
     
-    # 换手率
+    # 换手率 (V1.1: 无量拉升扣5分而非10分；暴量扣10分而非15分)
     turnover = safe_float(today.get('turnover_rate'))
     if turnover:
         if 3 <= turnover <= 12:
             score += 10
             reasons.append(f"换手率={turnover:.2f}%∈[3%,12%]+10分")
         elif turnover < 1.5:
-            score -= 10
-            reasons.append(f"换手率={turnover:.2f}%无量拉升-10分")
+            score -= 5
+            reasons.append(f"换手率={turnover:.2f}%无量拉升-5分")
         elif turnover > 20:
-            score -= 15
-            reasons.append(f"换手率={turnover:.2f}%高位暴量-15分")
+            score -= 10
+            reasons.append(f"换手率={turnover:.2f}%高位暴量-10分")
     
     # 洗盘-起爆节奏：前2日缩量+当日放量
     vol_ratio_yest = safe_float(yesterday.get('vol_ratio'))
@@ -304,8 +307,9 @@ def calc_trend_score(factor_data: List[dict]) -> Tuple[float, List[str]]:
             score += 15
             reasons.append(f"均线多头排列:MA5={ma5:.2f}>MA10={ma10:.2f}>MA20={ma20:.2f}+15分")
         elif ma5 < ma10 < ma20:
-            score -= 15
-            reasons.append(f"均线空头排列:MA5={ma5:.2f}<MA10={ma10:.2f}<MA20={ma20:.2f}-15分")
+            score -= 10  # V1.1: 从15降至10
+            # V1.1: 空头排列扣10分而非15分
+            reasons.append(f"均线空头排列:MA5={ma5:.2f}<MA10={ma10:.2f}<MA20={ma20:.2f}-10分")
         else:
             reasons.append(f"均线交织:MA5={ma5:.2f},MA10={ma10:.2f},MA20={ma20:.2f}")
     
@@ -315,8 +319,9 @@ def calc_trend_score(factor_data: List[dict]) -> Tuple[float, List[str]]:
         if len(factor_data) >= 5:
             ma60_5d_ago = safe_float(factor_data[4].get('ma_bfq_60'))
             if ma60_5d_ago and ma60 < ma60_5d_ago:
-                score -= 10
-                reasons.append(f"MA60下倾-10分")
+                score -= 5  # V1.1: 从10降至5
+                # V1.1: MA60下倾扣5分而非10分
+                reasons.append(f"MA60下倾-5分")
     
     # 回踩企稳：检查近5日最低价是否触及均线后站回
     if close and ma10 and ma20:
@@ -436,8 +441,9 @@ def calc_chip_score(factor_data: List[dict]) -> Tuple[float, List[str]]:
             score += 10
             reasons.append(f"筹码集中:布林带宽{boll_width:.1f}%<12%+10分")
         elif boll_width > 25:
-            score -= 10
-            reasons.append(f"筹码发散:布林带宽{boll_width:.1f}%>25%-10分")
+            score -= 5  # V1.1: 从10降至5
+            # V1.1: 筹码发散扣5分而非10分
+            reasons.append(f"筹码发散:布林带宽{boll_width:.1f}%>25%-5分")
     
     # 用收盘价相对布林中轨位置代理获利盘
     if close and boll_mid:

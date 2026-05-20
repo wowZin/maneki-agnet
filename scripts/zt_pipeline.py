@@ -797,9 +797,10 @@ def score_technical(code):
         if cost_5 and cost_95 and cost_95 > cost_5:
             conc = (cost_95 - cost_5) / (cost_95 + cost_5) * 100  # 集中度指标
             # 套牢盘估算：winner_rate < 30% 视为高位套牢盘>70%
-            if winner is not None and winner < 30:
-                return 0, f"筹码高位发散:获利盘仅{winner:.1f}%"
-            # 集中度较5日前扩大>30%（需历史数据对比）
+            if winner is not None and winner < 15:
+                # V1.1: 获利盘<15%才否决（从<30%放宽，上涨初期30%获利盘属正常）
+                return 0, f"筹码高位发散:获利盘仅{winner:.1f}%<15%"
+            # 集中度较5日前扩大>50%（V1.1: 从30%放宽至50%）
             try:
                 resp2 = call_tushare("cyq_perf", token, {"ts_code": code, "start_date": (datetime.now() - timedelta(days=10)).strftime('%Y%m%d')}, "trade_date,cost_5pct,cost_95pct")
                 hist_cyq = resp2.get("data", {}).get("items", [])
@@ -809,8 +810,8 @@ def score_technical(code):
                     old_95 = safe_float(old[2])
                     if old_5 and old_95 and old_95 > old_5:
                         old_conc = (old_95 - old_5) / (old_95 + old_5) * 100
-                        if old_conc > 0 and conc > old_conc * 1.3:
-                            return 0, f"筹码发散:集中度扩大{(conc/old_conc-1)*100:.0f}%"
+                        if old_conc > 0 and conc > old_conc * 1.5:
+                            return 0, f"筹码发散:集中度扩大{(conc/old_conc-1)*100:.0f}%>50%"
             except Exception:
                 pass
     else:
@@ -824,17 +825,19 @@ def score_technical(code):
                 if bu and bl and bm:
                     boll_widths.append((bu - bl) / bm * 100)
             if len(boll_widths) >= 5:
-                # 带宽扩大>30% = 筹码发散（代理方案）
-                if boll_widths[0] > boll_widths[-1] * 1.3:
-                    return 0, f"筹码高位发散:带宽扩大{(boll_widths[0]/boll_widths[-1]-1)*100:.0f}%[BOLL代理]"
+                # V1.1: 带宽扩大>50%才否决（从30%放宽）
+                if boll_widths[0] > boll_widths[-1] * 1.5:
+                    return 0, f"筹码高位发散:带宽扩大{(boll_widths[0]/boll_widths[-1]-1)*100:.0f}%>50%[BOLL代理]"
     
-    # 2.4 持续缩量阴跌：连续3日量比<0.5且下跌
+    # 2.4 持续缩量阴跌：连续3日量比<0.3且累计跌幅>3%（V1.1: 从量比<0.5放宽至<0.3，新增跌幅>3%条件）
     if len(factors) >= 3:
         vr_list = [safe_float(factors[i].get('vol_ratio')) for i in range(3)]
         pc_list = [safe_float(factors[i].get('pct_change')) for i in range(3)]
-        if all(vr and vr < 0.5 for vr in vr_list if vr):
-            if all(pc and pc < 0 for pc in pc_list if pc):
-                return 0, f"持续缩量阴跌:连续3日缩量下跌"
+        valid_vr = [vr for vr in vr_list if vr]
+        valid_pc = [pc for pc in pc_list if pc]
+        if len(valid_vr) == 3 and all(vr < 0.3 for vr in valid_vr):
+            if len(valid_pc) == 3 and sum(valid_pc) < -3:
+                return 0, f"持续缩量阴跌:3日量比均<0.3,累计跌{sum(valid_pc):.1f}%>3%"
     
     # 2.5 资金持续出逃：近2日主力净流出且分时承接<0.4
     if mf_data and len(mf_data) >= 2:
@@ -853,29 +856,29 @@ def score_technical(code):
     vol_score = 0
     vol_reasons = []
     
-    # 量比启动
+    # 量比启动 (V1.1: 量比<1.5不再扣分，仅不加分；>6.0异常扣5分)
     if vol_ratio:
         if 1.8 <= vol_ratio <= 4.0:
             vol_score += 15
             vol_reasons.append(f"量比={vol_ratio:.2f}∈[1.8,4.0]+15")
         elif vol_ratio < 1.5:
-            vol_reasons.append(f"量比={vol_ratio:.2f}<1.5")
+            vol_reasons.append(f"量比={vol_ratio:.2f}<1.5(不加分)")
         elif vol_ratio > 6.0:
-            vol_score -= 10
-            vol_reasons.append(f"量比={vol_ratio:.2f}>6.0异常-10")
+            vol_score -= 5
+            vol_reasons.append(f"量比={vol_ratio:.2f}>6.0异常-5")
     
-    # 换手率
+    # 换手率 (V1.1: 无量拉升扣5分而非10分；暴量滞涨扣10分而非15分)
     turnover = safe_float(today.get('turnover_rate'))
     if turnover:
         if 3 <= turnover <= 12:
             vol_score += 10
             vol_reasons.append(f"换手={turnover:.1f}%+10")
         elif turnover < 1.5:
-            vol_score -= 10
-            vol_reasons.append(f"换手={turnover:.1f}%无量-10")
+            vol_score -= 5
+            vol_reasons.append(f"换手={turnover:.1f}%无量-5")
         elif turnover > 20:
-            vol_score -= 15
-            vol_reasons.append(f"换手={turnover:.1f}%暴量-15")
+            vol_score -= 10
+            vol_reasons.append(f"换手={turnover:.1f}%暴量-10")
     
     # 洗盘-起爆节奏
     if len(factors) >= 3:
@@ -919,15 +922,16 @@ def score_technical(code):
             trend_score += 15
             trend_reasons.append(f"均线多头+15")
         elif ma5 < ma10 < ma20:
-            trend_score -= 15
-            trend_reasons.append(f"均线空头-15")
+            # V1.1: 空头排列扣10分而非15分
+            trend_score -= 10
+            trend_reasons.append(f"均线空头-10")
     
-    # MA60方向
+    # MA60方向 (V1.1: MA60下倾扣5分而非10分)
     if ma60 and len(factors) >= 5:
         ma60_5d = safe_float(factors[4].get('ma_bfq_60'))
         if ma60_5d and ma60 < ma60_5d:
-            trend_score -= 10
-            trend_reasons.append(f"MA60下倾-10")
+            trend_score -= 5
+            trend_reasons.append(f"MA60下倾-5")
     
     # 回踩企稳
     if close and ma10:
@@ -958,6 +962,21 @@ def score_technical(code):
         if amplitude > 4 and vol_ratio and vol_ratio > 1.5:
             pos_score += 8
             pos_reasons.append(f"振幅{amplitude:.1f}%突破+8")
+        # V1.1新增: 假突破扣4分（3日内上影线占比>60%）
+        if len(factors) >= 3:
+            upper_shadow_count = 0
+            for i in range(3):
+                h = safe_float(factors[i].get('high'))
+                c = safe_float(factors[i].get('close'))
+                o = safe_float(factors[i].get('open'))
+                if h and c and o:
+                    body = abs(c - o)
+                    upper = h - max(c, o)
+                    if upper > 0 and body > 0 and upper / body > 1.0:
+                        upper_shadow_count += 1
+            if upper_shadow_count >= 2:  # 3日中2日以上长上影≈>60%
+                pos_score -= 4
+                pos_reasons.append(f"假突破:3日中{upper_shadow_count}日长上影-4")
     
     # 下影线（下影线长=支撑强=企稳信号）
     if close and open_price and low:
@@ -995,8 +1014,9 @@ def score_technical(code):
                 chip_score += 10
                 chip_reasons.append(f"低位密集(集中度{conc:.1f}%)+10")
             elif conc > 25:
-                chip_score -= 10
-                chip_reasons.append(f"筹码发散(集中度{conc:.1f}%)-10")
+                # V1.1: 筹码发散扣5分而非10分
+                chip_score -= 5
+                chip_reasons.append(f"筹码发散(集中度{conc:.1f}%)-5")
             # 锁定良好：获利盘>50%
             if winner is not None and winner > 50:
                 chip_score += 5
@@ -1013,8 +1033,9 @@ def score_technical(code):
                 chip_score += 10
                 chip_reasons.append(f"筹码集中(带宽{boll_width:.1f}%)[BOLL代理]+10")
             elif boll_width > 25:
-                chip_score -= 10
-                chip_reasons.append(f"筹码发散(带宽{boll_width:.1f}%)[BOLL代理]-10")
+                # V1.1: BOLL代理发散扣5分而非10分
+                chip_score -= 5
+                chip_reasons.append(f"筹码发散(带宽{boll_width:.1f}%)[BOLL代理]-5")
         
         # 筹码锁定检查（带宽持续收窄 = 锁仓度高）
         if len(factors) >= 5:
@@ -1103,9 +1124,14 @@ _FUND_FLOW_DATE = None
 
 def score_fundflow(code):
     """
-    资金面涨停潜力预判 V2.0
+    资金面涨停潜力预判 V2.1
     五维度量化评分：超大单主力35分 + 龙虎榜机构游资25分 + 分时盘口20分 + 融资聪明资金7分 + 筹码抛压13分
     含一票否决规则（含V2.0市场状态调节器+一字板豁免）
+    
+    V2.1变更（基于V2.0）：
+    - 否决4阈值放宽：主力净占比<10%→<5%才否决，5%-10%转维度1扣分
+    - 维1规模偏弱扣分修正：<0.1%从-5→-15(与文档对齐)
+    - 维1占比阈值细化：5%-15%偏弱区间扣5分
     
     V2.0变更：
     - 维4权重12→7(降共线性)，维5权重8→13(强锁仓)
@@ -1216,6 +1242,8 @@ def score_fundflow(code):
         if not is_yiziban and pct_chg >= 9.9:
             is_yiziban = True
     
+    # V2.1: 否决4阈值放宽 10%→5%，5%-10%偏弱区间转入维度1扣分
+    main_ratio_for_dim1 = None  # 保存主力占比供维度1使用(V2.1新增)
     if moneyflow_data and not is_yiziban:
         latest = moneyflow_data[0]
         buy_elg = safe_float(latest.get("buy_elg_amount", 0))
@@ -1229,8 +1257,10 @@ def score_fundflow(code):
         total_vol = total_buy + total_sell
         if total_vol > 0:
             main_ratio = (net_elg + net_lg) / total_vol * 100
-            if main_ratio < 10:
-                veto_flags.append(f"纯散户博弈:主力净占比{main_ratio:.1f}%<10%")
+            main_ratio_for_dim1 = main_ratio  # V2.1: 保存给维度1用
+            if main_ratio < 5:  # V2.1: <5%才否决(从10%放宽)
+                veto_flags.append(f"纯散户博弈:主力净占比{main_ratio:.1f}%<5%")
+            # V2.1: 5%-10%偏弱区间不否决，在维度1占比因子扣5分
     elif is_yiziban:
         # 一字板豁免：不触发否决，但记录豁免信息到reason
         yiziban_exempt = True
@@ -1329,16 +1359,24 @@ def score_fundflow(code):
                     dim1_score += 15
                     dim1_reason.append(f"主力净流入{main_net_ratio:.2f}%+15")
                 elif main_net_ratio < 0.1:
-                    dim1_score -= 5
-                    dim1_reason.append(f"主力净流入{main_net_ratio:.2f}%-5")
+                    dim1_score -= 15  # V2.1: 从-5修正为-15(与文档对齐)
+                    dim1_reason.append(f"主力净流入{main_net_ratio:.2f}%-15")
         
-        # 占比健康：主力净占比 > 30%
+        # 占比健康（V2.1细化阈值）：主力净占比梯度评分
+        # >30%: +10分（主力控盘强势），15%-30%: 0分（中性），5%-15%: -5分（偏弱），<5%: 否决拦截
         total_vol = buy_elg + sell_elg + buy_lg + sell_lg
         if total_vol > 0:
-            main_ratio = main_net / total_vol * 100
+            # V2.1: 如果否决阶段已计算main_ratio，优先使用(避免重复计算)
+            if main_ratio_for_dim1 is not None:
+                main_ratio = main_ratio_for_dim1
+            else:
+                main_ratio = main_net / total_vol * 100
             if main_ratio > 30:
                 dim1_score += 10
                 dim1_reason.append(f"主力占比{main_ratio:.1f}%+10")
+            elif main_ratio >= 5 and main_ratio < 15:  # V2.1新增：5%-15%偏弱扣分
+                dim1_score -= 5
+                dim1_reason.append(f"主力占比偏弱{main_ratio:.1f}%-5")
         
         # 持续抢筹：近3日连续净流入
         if len(moneyflow_data) >= 3:
