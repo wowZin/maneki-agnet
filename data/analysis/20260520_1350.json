@@ -1,0 +1,142 @@
+[
+  {
+    "code": "601126.SH",
+    "name": "四方股份",
+    "scores": {
+      "fundamental": 67.5,
+      "technical": 47,
+      "fundflow": 0,
+      "sentiment": 19
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=17.5%; 11个概念; 股东户数+19.4%",
+      "technical": "[低] 换手=4.0%+10; 均线多头+15; 回踩MA10企稳+10; 下影线支撑+4; 获利盘68.8%锁定+5",
+      "fundflow": "否决: 纯散户博弈:主力净占比-6.8%<5%",
+      "sentiment": "[无] 11概念+8; 题材军工+5; 20日涨停2次+3; 竞价关注度较高(量比0.7)+1; 竞价成交1833万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 33.375,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002654.SZ",
+    "name": "万润科技",
+    "scores": {
+      "fundamental": 55.8,
+      "technical": 40,
+      "fundflow": 0,
+      "sentiment": 30
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=2.1%偏低; 19个概念; 股东户数-3.4%; 负债率65%",
+      "technical": "[低] 均线多头+15; 回踩MA10企稳+10; 假突破:3日中2日长上影-4; 下影线支撑+4; 低位密集(集中度9.6%)+10",
+      "fundflow": "否决: 纯散户博弈:主力净占比-2.1%<5%",
+      "sentiment": "[无] 19概念+8; 题材华为概念+5; 换手17.2%情绪活跃+2; 20日涨停2次+3; 竞价跳空9.5%[震荡态×1.0]→2分; 竞价关注度极高(量比5.2)+5; 竞价量比6.3+3"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 31.45,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603216.SH",
+    "name": "梦天家居",
+    "scores": {
+      "fundamental": 56.0,
+      "technical": 0,
+      "fundflow": 0,
+      "sentiment": 1
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=3.6%偏低; 扣非净利+145%; 股东户数-15.6%",
+      "technical": "筹码高位发散:获利盘仅3.5%<15%",
+      "fundflow": "否决: 纯散户博弈:主力净占比-13.7%<5%",
+      "sentiment": "[无] 20日涨停+1"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 14.25,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002208.SZ",
+    "name": "合肥城建",
+    "scores": {
+      "fundamental": 0,
+      "technical": 30,
+      "fundflow": 0,
+      "sentiment": 19
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 负债率71%>70%且经营现金流为负",
+      "technical": "[无] 换手=23.6%暴量-10; 均线多头+15; 回踩MA10企稳+10; 获利盘100.2%锁定+5; 收盘/BOLL中轨1.629>1.01+3[VWAP代理]",
+      "fundflow": "否决: 纯散户博弈:主力净占比-11.3%<5%",
+      "sentiment": "[无] 8概念+8; 换手23.6%情绪活跃+2; 20日涨停5次+3; 竞价跳空-4.3%[震荡态×1.0]→0分; 竞价关注度高(量比2.8)+3; 竞价量比4.8+1"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 12.25,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002909.SZ",
+    "name": "集泰股份",
+    "scores": {
+      "fundamental": 33.0,
+      "technical": 10,
+      "fundflow": 0,
+      "sentiment": 0
+    },
+    "reasons": {
+      "fundamental": "[无] ROE=-3.1%偏低; 扣非净利-67%; 负债率62%; 流动性风险",
+      "technical": "[无] MA60下倾-5; 收盘<=MA20弱势; 假突破:3日中2日长上影-4; 下影线支撑+4; 获利盘50.5%锁定+5",
+      "fundflow": "否决: 纯散户博弈:主力净占比1.4%<5%",
+      "sentiment": "[无] 无明显信号"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 10.75,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  }
+]

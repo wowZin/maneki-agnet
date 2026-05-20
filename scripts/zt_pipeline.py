@@ -20,6 +20,7 @@ import requests
 # 项目根目录
 PROJECT_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
+sys.path.insert(0, str(PROJECT_DIR / "scripts"))  # 支持 from cdp_fetch import ...
 
 # 从.env加载配置
 def load_env():
@@ -132,8 +133,44 @@ def list_to_dict(items, fields):
     return result
 
 # ===== 1. 扫描涨速数据 =====
-def scan_surge():
-    """调用scan_cdp.py获取涨速数据"""
+def scan_surge(connect_retries=3, navigate_retries=2):
+    """通过CDP获取涨速数据（带重试机制）
+    
+    优先使用 cdp_fetch 模块（函数化+重试），降级回 subprocess 调用 scan_cdp.py
+    
+    Args:
+        connect_retries: CDP连接最大重试次数
+        navigate_retries: 导航获取最大重试次数
+    Returns: list[dict] - [{code, name}] 候选股列表，或None
+    """
+    # 方案1: 直接调用 cdp_fetch 模块（函数化，带重试）
+    try:
+        from cdp_fetch import get_surge_rate_cdp
+        stocks_raw = get_surge_rate_cdp(
+            connect_retries=connect_retries,
+            navigate_retries=navigate_retries,
+        )
+        if stocks_raw is None:
+            return None  # 非交易时段或彻底失败
+        
+        candidates = []
+        for s in stocks_raw:
+            code = s.get("代码") or s.get("code") or s.get("ts_code", "")
+            name = s.get("名称") or s.get("name", "")
+            if "." not in code:
+                if code.startswith("6"):
+                    code = f"{code}.SH"
+                else:
+                    code = f"{code}.SZ"
+            candidates.append({"code": code, "name": name})
+        
+        print(f"扫描完成(cdp_fetch模块): {len(candidates)} 只候选股")
+        return candidates
+        
+    except ImportError:
+        print("  cdp_fetch模块不可用，降级使用subprocess方式")
+    
+    # 方案2: subprocess调用scan_cdp.py（旧方式，无重试）
     scan_script = PROJECT_DIR / "scripts" / "scan_cdp.py"
     result = subprocess.run(
         [sys.executable, str(scan_script)],
@@ -180,7 +217,7 @@ def scan_surge():
                 code = f"{code}.SZ"
         candidates.append({"code": code, "name": name})
     
-    print(f"扫描完成: {len(candidates)} 只候选股")
+    print(f"扫描完成(subprocess方式): {len(candidates)} 只候选股")
     return candidates
 
 def load_from_file(filepath):
@@ -1121,6 +1158,43 @@ def score_technical(code):
 # 缓存当日资金流向数据（避免每次调用都请求全市场）
 _FUND_FLOW_CACHE = None
 _FUND_FLOW_DATE = None
+# akshare实时资金流向缓存（盘中场景优先使用）
+_AKSHARE_FUND_CACHE = None
+_AKSHARE_FUND_DATE = None
+
+def _get_akshare_fund_flow():
+    """获取akshare同花顺源个股资金流向实时数据（带缓存）。
+    返回DataFrame或None。盘中优先使用此数据源，降级时回退Tushare T+1。"""
+    global _AKSHARE_FUND_CACHE, _AKSHARE_FUND_DATE
+    from datetime import datetime
+    today_str = datetime.now().strftime("%Y%m%d")
+    if _AKSHARE_FUND_CACHE is not None and _AKSHARE_FUND_DATE == today_str:
+        return _AKSHARE_FUND_CACHE
+    try:
+        import akshare as ak
+        df = ak.stock_fund_flow_individual()
+        _AKSHARE_FUND_CACHE = df
+        _AKSHARE_FUND_DATE = today_str
+        return df
+    except Exception as e:
+        print(f"akshare资金流向获取失败: {e}, 将降级使用Tushare T+1数据")
+        return None
+
+def _parse_akshare_amount(val_str):
+    """解析akshare金额字符串，返回亿元单位的浮点数。
+    akshare格式：'1.35亿', '4289.20万', '2021.40万', '-16.52万' 等"""
+    if val_str is None:
+        return 0.0
+    s = str(val_str).strip()
+    if '亿' in s:
+        return float(s.replace('亿', ''))
+    elif '万' in s:
+        return float(s.replace('万', '')) / 10000.0
+    else:
+        try:
+            return float(s) / 100000000.0  # 纯数字可能是元
+        except:
+            return 0.0
 
 def score_fundflow(code):
     """
@@ -1208,6 +1282,116 @@ def score_fundflow(code):
     except:
         pass
     
+    # 1.6 akshare实时资金流向（盘中优先使用，降级回退Tushare T+1）
+    # 同花顺源不受东方财富反爬影响，盘中场景提供当日实时数据
+    akshare_fund = None  # 该股票的akshare资金流向行(dict)
+    akshare_fund_net_ratio = None  # 主力净占比(%)
+    akshare_fund_main_net_ratio = None  # 主力净额/成交额(%)
+    akshare_fund_net_amount_yi = None  # 净额(亿元)
+    akshare_fund_total_amount_yi = None  # 成交额(亿元)
+    akshare_main_buy_yi = None  # 流入资金(亿元, akshare原始单位)
+    akshare_main_sell_yi = None  # 流出资金(亿元, akshare原始单位)
+    akshare_main_net_yi = None  # 主力净额(亿元)
+    akshare_pct_change = None  # 涨跌幅(用于否决2.4资金背离+维度1规模)
+    akshare_turnover = None  # 换手率(用于维度1判断)
+    
+    df_akshare = _get_akshare_fund_flow()
+    if df_akshare is not None:
+        try:
+            # akshare股票代码列是整数类型(002763→2763)，需转int匹配
+            code_int = int(code.split('.')[0])
+            row = df_akshare[df_akshare.iloc[:, 0] == code_int]
+            if len(row) > 0:
+                r = row.iloc[0]
+                akshare_fund = r.to_dict()
+                # 解析金额（akshare单位：净额=万, 流入/流出/成交额=亿）
+                # 列名：股票代码,股票简称,最新价,涨跌幅,换手率,流入资金,流出资金,净额,成交额
+                # 注意：不同版本akshare列名可能略有差异，用iloc索引兜底
+                col_names = list(df_akshare.columns)
+                
+                # 净额列（单位：万，需转亿）
+                net_col = None
+                for c in col_names:
+                    if '净额' in str(c) or '净流入' in str(c):
+                        net_col = c
+                        break
+                if net_col is None and len(col_names) >= 8:
+                    net_col = col_names[7]  # 第8列通常是净额
+                
+                # 流入/流出/成交额列（单位：亿）
+                inflow_col = None
+                outflow_col = None
+                amount_col = None
+                for c in col_names:
+                    if '流入' in str(c) and '流出' not in str(c):
+                        inflow_col = c
+                    if '流出' in str(c) and '流入' not in str(c):
+                        outflow_col = c
+                    if '成交额' in str(c) or '成交' in str(c):
+                        amount_col = c
+                if inflow_col is None and len(col_names) >= 6:
+                    inflow_col = col_names[5]
+                if outflow_col is None and len(col_names) >= 7:
+                    outflow_col = col_names[6]
+                if amount_col is None and len(col_names) >= 9:
+                    amount_col = col_names[8]
+                
+                # 涨跌幅列
+                pct_col = None
+                for c in col_names:
+                    if '涨跌幅' in str(c) or '涨跌' in str(c):
+                        pct_col = c
+                        break
+                if pct_col is None and len(col_names) >= 4:
+                    pct_col = col_names[3]
+                
+                # 换手率列
+                turnover_col = None
+                for c in col_names:
+                    if '换手率' in str(c) or '换手' in str(c):
+                        turnover_col = c
+                        break
+                if turnover_col is None and len(col_names) >= 5:
+                    turnover_col = col_names[4]
+                
+                # 计算关键指标
+                if net_col and amount_col:
+                    net_val = _parse_akshare_amount(str(r.get(net_col, '0')))
+                    # 净额在akshare中是"万"单位，parse后已转为亿
+                    akshare_fund_net_amount_yi = net_val
+                    
+                    total_amount_val = _parse_akshare_amount(str(r.get(amount_col, '0')))
+                    akshare_fund_total_amount_yi = total_amount_val
+                    
+                    # 净占比 = 净额(亿) / 成交额(亿) * 100
+                    if total_amount_val > 0:
+                        akshare_fund_net_ratio = net_val / total_amount_val * 100
+                
+                if inflow_col and outflow_col:
+                    # 流入/流出单位是亿
+                    akshare_main_buy_yi = _parse_akshare_amount(str(r.get(inflow_col, '0')))
+                    akshare_main_sell_yi = _parse_akshare_amount(str(r.get(outflow_col, '0')))
+                    akshare_main_net_yi = akshare_main_buy_yi - akshare_main_sell_yi
+                    
+                    # 主力净占比 = (流入-流出)/(流入+流出) * 100
+                    total_main = akshare_main_buy_yi + akshare_main_sell_yi
+                    if total_main > 0:
+                        akshare_fund_main_net_ratio = akshare_main_net_yi / total_main * 100
+                
+                # 涨跌幅和换手率（已在函数顶部初始化为None）
+                if pct_col:
+                    try:
+                        akshare_pct_change = float(r.get(pct_col, 0))
+                    except:
+                        pass
+                if turnover_col:
+                    try:
+                        akshare_turnover = float(r.get(turnover_col, 0))
+                    except:
+                        pass
+        except Exception as e:
+            print(f"akshare资金解析失败({code}): {e}")
+    
     # ===== 2. 一票否决检查 =====
     yiziban_exempt = False  # V2.0一字板豁免标志
     # 2.1 主力持续流出：近3日累计净流出 > 0.5%流通市值
@@ -1243,24 +1427,36 @@ def score_fundflow(code):
             is_yiziban = True
     
     # V2.1: 否决4阈值放宽 10%→5%，5%-10%偏弱区间转入维度1扣分
+    # V2.2: 盘中优先使用akshare实时主力净占比，降级回退Tushare T+1
     main_ratio_for_dim1 = None  # 保存主力占比供维度1使用(V2.1新增)
-    if moneyflow_data and not is_yiziban:
-        latest = moneyflow_data[0]
-        buy_elg = safe_float(latest.get("buy_elg_amount", 0))
-        sell_elg = safe_float(latest.get("sell_elg_amount", 0))
-        buy_lg = safe_float(latest.get("buy_lg_amount", 0))
-        sell_lg = safe_float(latest.get("sell_lg_amount", 0))
-        net_elg = buy_elg - sell_elg
-        net_lg = buy_lg - sell_lg
-        total_buy = buy_elg + buy_lg
-        total_sell = sell_elg + sell_lg
-        total_vol = total_buy + total_sell
-        if total_vol > 0:
-            main_ratio = (net_elg + net_lg) / total_vol * 100
-            main_ratio_for_dim1 = main_ratio  # V2.1: 保存给维度1用
-            if main_ratio < 5:  # V2.1: <5%才否决(从10%放宽)
-                veto_flags.append(f"纯散户博弈:主力净占比{main_ratio:.1f}%<5%")
+    akshare_used_in_veto = False  # 标记是否使用了akshare数据(用于reason标注)
+    
+    if not is_yiziban:
+        # 盘中优先用akshare实时数据
+        if akshare_fund_main_net_ratio is not None:
+            main_ratio = akshare_fund_main_net_ratio
+            main_ratio_for_dim1 = main_ratio
+            akshare_used_in_veto = True
+            if main_ratio < 5:  # V2.1: <5%才否决
+                veto_flags.append(f"纯散户博弈[实时]:主力净占比{main_ratio:.1f}%<5%")
             # V2.1: 5%-10%偏弱区间不否决，在维度1占比因子扣5分
+        elif moneyflow_data:
+            # 降级：Tushare T+1数据
+            latest = moneyflow_data[0]
+            buy_elg = safe_float(latest.get("buy_elg_amount", 0))
+            sell_elg = safe_float(latest.get("sell_elg_amount", 0))
+            buy_lg = safe_float(latest.get("buy_lg_amount", 0))
+            sell_lg = safe_float(latest.get("sell_lg_amount", 0))
+            net_elg = buy_elg - sell_elg
+            net_lg = buy_lg - sell_lg
+            total_buy = buy_elg + buy_lg
+            total_sell = sell_elg + sell_lg
+            total_vol = total_buy + total_sell
+            if total_vol > 0:
+                main_ratio = (net_elg + net_lg) / total_vol * 100
+                main_ratio_for_dim1 = main_ratio
+                if main_ratio < 5:  # V2.1: <5%才否决
+                    veto_flags.append(f"纯散户博弈[T-1]:主力净占比{main_ratio:.1f}%<5%")
     elif is_yiziban:
         # 一字板豁免：不触发否决，但记录豁免信息到reason
         yiziban_exempt = True
@@ -1279,8 +1475,8 @@ def score_fundflow(code):
             veto_flags.append(f"龙虎榜净卖出{total_net_sell:.0f}万")
     
     # 2.4 分时资金背离：股价拉升>3%但资金净流入为负
-    # T+1场景简化：当日涨幅>3%但主力净流出
     # V2.0市场状态调节器：低迷市(成交额<8000亿或跌停>20家)阈值放宽
+    # 盘中优先用akshare实时数据（涨跌幅+净占比），降级用Tushare T+1
     corr_threshold = -0.6  # 默认相关系数阈值
     if daily_basic_data:
         try:
@@ -1307,7 +1503,17 @@ def score_fundflow(code):
         except:
             pass
     
-    if moneyflow_data and daily_basic_data:
+    # 盘中优先用akshare实时涨跌幅+净占比判断背离
+    if akshare_pct_change is not None and akshare_fund_net_ratio is not None:
+        # akshare实时：涨跌幅>3%但净占比为负（资金背离）
+        if akshare_pct_change > 3 and akshare_fund_net_ratio < 0:
+            if corr_threshold < -0.6:
+                # 低迷市放宽，不触发背离否决
+                pass
+            else:
+                veto_flags.append(f"资金背离[akshare]:涨{akshare_pct_change:.1f}%但净占比{akshare_fund_net_ratio:.1f}%")
+    elif moneyflow_data and daily_basic_data:
+        # 降级：Tushare T+1
         latest_basic = daily_basic_data[0]
         pct_change = safe_float(latest_basic.get("pct_change", 0))
         if pct_change > 3:
@@ -1320,75 +1526,121 @@ def score_fundflow(code):
                     # 低迷市放宽，不触发背离否决
                     pass
                 else:
-                    veto_flags.append(f"资金背离:涨{pct_change:.1f}%但净流出{abs(net_mf)/10000:.0f}万")
+                    veto_flags.append(f"资金背离[T+1]:涨{pct_change:.1f}%但净流出{abs(net_mf)/10000:.0f}万")
     
     # 否决5(尾盘集中兑现)：14:45后资金净流出占全天流出比例>60%
-    # T+1替代：主力净流出>0.3%流通市值（与设计文档维度1规模阈值对齐）
-    if moneyflow_data and daily_basic_data:
+    # V2.2: 盘中优先用akshare实时数据（净流出占成交额>3%），降级用Tushare（净流出>0.3%流通市值）
+    if akshare_fund_net_amount_yi is not None and akshare_fund_total_amount_yi is not None and akshare_fund_total_amount_yi > 0:
+        akshare_net_pct = akshare_fund_net_amount_yi / akshare_fund_total_amount_yi * 100
+        if akshare_net_pct < -3:  # 净流出占成交额>3%
+            veto_flags.append(f"大额流出[实时]:净占比{akshare_net_pct:.1f}%")
+    elif moneyflow_data and daily_basic_data:
+        # 降级：Tushare T+1
         latest_mf = moneyflow_data[0]
         net_mf = safe_float(latest_mf.get("net_mf_amount", 0))
         circ_mv = safe_float(daily_basic_data[0].get("circ_mv", 0)) * 10000
         if circ_mv > 0 and net_mf < -circ_mv * 0.003:
-            veto_flags.append(f"大额流出:净流出{abs(net_mf)/10000:.0f}万")
+            veto_flags.append(f"大额流出[T-1]:净流出{abs(net_mf)/10000:.0f}万")
     
     # 触发否决直接返回
     if veto_flags:
         return 0, f"否决: {'; '.join(veto_flags)}"
     
     # ===== 3. 维度1：超大单主力净流入（35分）=====
+    # V2.2: 盘中优先使用akshare实时数据，降级回退Tushare T+1
     dim1_score = 0
     dim1_reason = []
     
-    if moneyflow_data:
+    # --- 规模阈值因子(15分)：主力净流入占市值/成交额比例 ---
+    # 盘中：净额/成交额比例（akshare实时）
+    # 盘后/T+1：主力净额/流通市值比例（Tushare）
+    if akshare_fund_net_amount_yi is not None and akshare_fund_total_amount_yi is not None and akshare_fund_total_amount_yi > 0:
+        # akshare实时：净额占成交额比例
+        akshare_net_pct = akshare_fund_net_amount_yi / akshare_fund_total_amount_yi * 100
+        if akshare_net_pct >= 3:  # 净流入占成交额>=3%
+            dim1_score += 15
+            dim1_reason.append(f"主力净流入[实时]{akshare_net_pct:.2f}%+15")
+        elif akshare_net_pct < 0.1:  # 净流入占比极低
+            dim1_score -= 15
+            dim1_reason.append(f"主力净流入[实时]{akshare_net_pct:.2f}%-15")
+    elif moneyflow_data and daily_basic_data:
+        # 降级：Tushare T+1
+        latest = moneyflow_data[0]
+        buy_elg = safe_float(latest.get("buy_elg_amount", 0))
+        sell_elg = safe_float(latest.get("sell_elg_amount", 0))
+        buy_lg = safe_float(latest.get("buy_lg_amount", 0))
+        sell_lg = safe_float(latest.get("sell_lg_amount", 0))
+        main_net = (buy_elg - sell_elg) + (buy_lg - sell_lg)
+        circ_mv = safe_float(daily_basic_data[0].get("circ_mv", 0)) * 10000  # 万转元
+        if circ_mv > 0:
+            main_net_ratio = main_net / circ_mv * 100
+            if main_net_ratio >= 0.3:
+                dim1_score += 15
+                dim1_reason.append(f"主力净流入[T-1]{main_net_ratio:.2f}%+15")
+            elif main_net_ratio < 0.1:
+                dim1_score -= 15  # V2.1: 从-5修正为-15(与文档对齐)
+                dim1_reason.append(f"主力净流入[T-1]{main_net_ratio:.2f}%-15")
+    
+    # --- 占比健康因子(10分)：主力净占比梯度评分 ---
+    # >30%: +10分，15%-30%: 0分(中性)，5%-15%: -5分(偏弱)，<5%: 已在否决区拦截
+    # main_ratio_for_dim1 已在否决2.2阶段计算(含akshare实时优先)
+    if main_ratio_for_dim1 is not None:
+        main_ratio = main_ratio_for_dim1
+        if akshare_used_in_veto:
+            src_tag = "[实时]"
+        elif moneyflow_data:
+            src_tag = "[T-1]"
+        else:
+            src_tag = ""
+        if main_ratio > 30:
+            dim1_score += 10
+            dim1_reason.append(f"主力占比{src_tag}{main_ratio:.1f}%+10")
+        elif main_ratio >= 5 and main_ratio < 15:  # V2.1: 5%-15%偏弱扣分
+            dim1_score -= 5
+            dim1_reason.append(f"主力占比偏弱{src_tag}{main_ratio:.1f}%-5")
+    elif moneyflow_data:
+        # 降级：Tushare计算
+        latest = moneyflow_data[0]
+        buy_elg = safe_float(latest.get("buy_elg_amount", 0))
+        sell_elg = safe_float(latest.get("sell_elg_amount", 0))
+        buy_lg = safe_float(latest.get("buy_lg_amount", 0))
+        sell_lg = safe_float(latest.get("sell_lg_amount", 0))
+        main_net = (buy_elg - sell_elg) + (buy_lg - sell_lg)
+        total_vol = buy_elg + sell_elg + buy_lg + sell_lg
+        if total_vol > 0:
+            main_ratio = main_net / total_vol * 100
+            if main_ratio > 30:
+                dim1_score += 10
+                dim1_reason.append(f"主力占比[T-1]{main_ratio:.1f}%+10")
+            elif main_ratio >= 5 and main_ratio < 15:
+                dim1_score -= 5
+                dim1_reason.append(f"主力占比偏弱[T-1]{main_ratio:.1f}%-5")
+    
+    # --- 持续抢筹因子(10分)：近3日连续净流入（仍用Tushare历史数据） ---
+    if moneyflow_data and len(moneyflow_data) >= 3:
+        net_3d = [safe_float(x.get("net_mf_amount", 0)) for x in moneyflow_data[:3]]
+        if all(n > 0 for n in net_3d):
+            dim1_score += 10
+            dim1_reason.append(f"连续3日净流入+10")
+    
+    # --- 散户接盘因子(-10分)：主力流出但总净流入为正 ---
+    # 盘中：akshare主力净额<0且总净额>0
+    # 降级：Tushare main_net<0且net_mf>0
+    if akshare_main_net_yi is not None and akshare_fund_net_amount_yi is not None:
+        if akshare_main_net_yi < 0 and akshare_fund_net_amount_yi > 0:
+            dim1_score -= 10
+            dim1_reason.append(f"散户接盘[实时]-10")
+    elif moneyflow_data:
         latest = moneyflow_data[0]
         buy_elg = safe_float(latest.get("buy_elg_amount", 0))
         sell_elg = safe_float(latest.get("sell_elg_amount", 0))
         buy_lg = safe_float(latest.get("buy_lg_amount", 0))
         sell_lg = safe_float(latest.get("sell_lg_amount", 0))
         net_mf = safe_float(latest.get("net_mf_amount", 0))
-        
-        # 主力净额（超大单+大单）
         main_net = (buy_elg - sell_elg) + (buy_lg - sell_lg)
-        
-        # 规模阈值：主力净流入 >= 流通市值0.3%
-        if daily_basic_data:
-            circ_mv = safe_float(daily_basic_data[0].get("circ_mv", 0)) * 10000  # 万转元
-            if circ_mv > 0:
-                main_net_ratio = main_net / circ_mv * 100
-                if main_net_ratio >= 0.3:
-                    dim1_score += 15
-                    dim1_reason.append(f"主力净流入{main_net_ratio:.2f}%+15")
-                elif main_net_ratio < 0.1:
-                    dim1_score -= 15  # V2.1: 从-5修正为-15(与文档对齐)
-                    dim1_reason.append(f"主力净流入{main_net_ratio:.2f}%-15")
-        
-        # 占比健康（V2.1细化阈值）：主力净占比梯度评分
-        # >30%: +10分（主力控盘强势），15%-30%: 0分（中性），5%-15%: -5分（偏弱），<5%: 否决拦截
-        total_vol = buy_elg + sell_elg + buy_lg + sell_lg
-        if total_vol > 0:
-            # V2.1: 如果否决阶段已计算main_ratio，优先使用(避免重复计算)
-            if main_ratio_for_dim1 is not None:
-                main_ratio = main_ratio_for_dim1
-            else:
-                main_ratio = main_net / total_vol * 100
-            if main_ratio > 30:
-                dim1_score += 10
-                dim1_reason.append(f"主力占比{main_ratio:.1f}%+10")
-            elif main_ratio >= 5 and main_ratio < 15:  # V2.1新增：5%-15%偏弱扣分
-                dim1_score -= 5
-                dim1_reason.append(f"主力占比偏弱{main_ratio:.1f}%-5")
-        
-        # 持续抢筹：近3日连续净流入
-        if len(moneyflow_data) >= 3:
-            net_3d = [safe_float(x.get("net_mf_amount", 0)) for x in moneyflow_data[:3]]
-            if all(n > 0 for n in net_3d):
-                dim1_score += 10
-                dim1_reason.append(f"连续3日净流入+10")
-        
-        # 负向：散户接盘（中小单流入、主力流出）
-        if main_net < 0 and net_mf > 0:  # 主力流出但总净流入为正
+        if main_net < 0 and net_mf > 0:
             dim1_score -= 10
-            dim1_reason.append(f"散户接盘-10")
+            dim1_reason.append(f"散户接盘[T-1]-10")
     
     dim1_score = max(0, min(35, dim1_score))
     score += dim1_score

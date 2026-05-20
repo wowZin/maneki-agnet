@@ -23,7 +23,6 @@ echo "----------------------------------------"
 
 # 启动！(无头模式适合cron后台运行)
 exec "$CHROME_BIN" \
-  --headless \
   --remote-debugging-port="$DEBUG_PORT" \
   --remote-allow-origins="*" \
   --user-data-dir="$PROFILE_DIR" \
