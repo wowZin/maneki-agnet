@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""涨停预测扫描主程序"""
+"""涨停预测扫描主程序 - 使用requests+代理获取涨速"""
 import json
-import urllib.request
-import re
-import websocket
-import time
 import os
 import sys
+import time
 import datetime
+from pathlib import Path
 from dotenv import load_dotenv
+
+# 添加scripts目录到sys.path以便导入proxy_utils
+sys.path.insert(0, str(Path(__file__).parent))
+import proxy_utils
 
 # 加载环境变量
 load_dotenv('/Users/zhangying/projects/study/maneki-agent/.env')
@@ -39,117 +41,21 @@ except Exception as e:
         sys.exit(0)
     print("假设今天是交易日，继续执行")
 
-# ===== Step 2: 获取涨速数据 =====
+# ===== Step 2: 获取涨速数据 (requests+代理) =====
 print()
 print("=" * 60)
-print("Step 2: 获取涨速数据 (Chrome CDP)")
+print("Step 2: 获取涨速数据 (requests+代理)")
 print("=" * 60)
 
-try:
-    targets = json.loads(urllib.request.urlopen("http://localhost:9222/json/list", timeout=5).read())
-except Exception as e:
-    print(f"连接Chrome CDP失败: {e}")
-    print("请确保Chrome已启动: open -a 'Google Chrome' --args --remote-debugging-port=9222")
+from cdp_fetch import get_surge_rate_requests
+
+stocks_result = get_surge_rate_requests()
+if stocks_result is None:
+    print("获取涨速数据失败，退出")
     sys.exit(1)
 
-page_target = None
-for t in targets:
-    if t.get("type") == "page":
-        page_target = t
-        break
-
-if not page_target:
-    print("未找到可用页面")
-    sys.exit(1)
-
-ws_url = page_target["webSocketDebuggerUrl"]
-print(f"找到页面: {page_target.get('url', '')[:60]}...")
-
-# 构建API URL
-api_url = (
-    "https://push2.eastmoney.com/api/qt/clist/get?"
-    "np=1&fltt=2&invt=2&"
-    "fs=m:0+t:6+f:!2,m:0+t:80+f:!2,m:1+t:2+f:!2,m:1+t:23+f:!2,m:0+t:81+s:262144+f:!2&"
-    "fields=f12,f13,f14,f2,f4,f3,f5,f6,f7,f15,f18,f16,f17,f10,f8,f9,f11&"
-    "fid=f11&pn=1&pz=500&po=1&dect=1&"
-    "ut=fa5fd1943c7b386f172d6893dbfba10b&cb="
-)
-
-ws = websocket.create_connection(ws_url, timeout=30)
-ws.send(json.dumps({
-    "id": 1,
-    "method": "Page.navigate",
-    "params": {"url": api_url}
-}))
-
-time.sleep(3)
-
-ws.send(json.dumps({
-    "id": 2,
-    "method": "Runtime.evaluate",
-    "params": {
-        "expression": "document.body ? document.body.innerText : '{}'",
-        "returnByValue": True
-    }
-}))
-
-result = None
-while True:
-    msg = ws.recv()
-    data = json.loads(msg)
-    if data.get("id") == 2:
-        result = data
-        break
-
-ws.close()
-
-# 解析数据
-value = result.get("result", {}).get("result", {}).get("value", "{}")
-api_data = json.loads(value)
-
-if not api_data.get("data") or not api_data["data"].get("diff"):
-    print(f"API返回异常")
-    sys.exit(1)
-
-stocks = api_data["data"]["diff"]
-print(f"获取到 {len(stocks)} 条数据")
-
-# 过滤数据
-filtered = []
-for s in stocks:
-    code = s.get("f12", "")
-    name = s.get("f14", "")
-    
-    if re.search(r"ST|\*ST|退|N", name or ""):
-        continue
-    if re.match(r"^(300|301|688|8|4|920)", code):
-        continue
-    
-    pct = s.get("f3")
-    f11 = s.get("f11")
-    price = s.get("f2")
-    amount = s.get("f6")
-    
-    if pct is None or pct == "-":
-        continue
-    try:
-        pct = float(pct)
-        f11 = float(f11) if f11 and f11 != "-" else 0
-        price = float(price) if price and price != "-" else 0
-        amount = float(amount) if amount and amount != "-" else 0
-    except:
-        continue
-    
-    filtered.append({
-        "代码": code,
-        "名称": name,
-        "涨幅%": pct,
-        "5分钟涨速%": f11,
-        "最新价": price,
-        "成交额": amount
-    })
-
-print(f"过滤后: {len(filtered)} 只")
+# 使用已获取的涨速数据
+filtered = stocks_result
 
 # 按涨速排序取前100
 filtered.sort(key=lambda x: x["5分钟涨速%"], reverse=True)

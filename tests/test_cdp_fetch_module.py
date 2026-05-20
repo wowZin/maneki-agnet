@@ -9,6 +9,7 @@
 5. 数据解析 (parse_surge_data)
 6. 完整流程重试 (get_surge_rate_cdp) - mock场景
 7. 保存数据 (save_surge_data)
+8. requests+代理模式 (get_surge_rate_requests) - mock场景
 
 运行: cd /Users/zhangying/projects/study/maneki-agent && python3 -m pytest tests/test_cdp_fetch_module.py -v
 """
@@ -17,6 +18,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch, call
@@ -33,6 +35,7 @@ from cdp_fetch import (
     parse_surge_data,
     save_surge_data,
     get_surge_rate_cdp,
+    get_surge_rate_requests,
 )
 
 
@@ -372,17 +375,143 @@ class TestSaveSurgeData(unittest.TestCase):
                 self.assertEqual(saved["stocks"][0]["名称"], "平安银行")
 
 
+class TestGetSurgeRateRequests(unittest.TestCase):
+    """requests+代理模式测试"""
+
+    def test_requests_success(self):
+        """requests+代理成功获取数据"""
+        import requests
+        mock_session = MagicMock(spec=requests.Session)
+        mock_session.headers = {"User-Agent": "test"}
+        mock_session.proxies = {"http": "http://1.2.3.4:8080", "https": "http://1.2.3.4:8080"}
+
+        api_data = {
+            "data": {
+                "diff": [
+                    {"f12": "000001", "f14": "平安银行", "f3": 2.5, "f11": 3.5, "f2": 12.5, "f6": 500000, "f10": 1.5}
+                ]
+            }
+        }
+        mock_resp = MagicMock()
+        mock_resp.text = json.dumps(api_data)
+        mock_resp.status_code = 200
+
+        mock_session.get.return_value = mock_resp
+
+        with patch('cdp_fetch.proxy_utils.is_proxy_enabled', return_value=True), \
+             patch('cdp_fetch.proxy_utils._cached_proxy', {
+                 "ip": "1.2.3.4", "port": 8080,
+                 "expires_at": time.time() + 100
+             }), \
+             patch('cdp_fetch.proxy_utils.get_requests_session_with_proxy', return_value=mock_session), \
+             patch('cdp_fetch.parse_surge_data') as mock_parse, \
+             patch('cdp_fetch.save_surge_data', return_value="/tmp/test.json"):
+            mock_parse.return_value = [{"代码": "000001", "名称": "平安银行", "涨幅%": 2.5, "5分钟涨速%": 3.5, "最新价": 12.5, "成交额": 500000, "量比": 1.5}]
+            result = get_surge_rate_requests()
+            self.assertIsNotNone(result)
+            self.assertEqual(len(result), 1)
+
+    def test_requests_no_proxy_success(self):
+        """无代理时requests也能工作"""
+        import requests
+        mock_session = MagicMock(spec=requests.Session)
+        mock_session.headers = {"User-Agent": "test"}
+        mock_session.proxies = {}
+
+        api_data = {
+            "data": {
+                "diff": [
+                    {"f12": "000001", "f14": "平安银行", "f3": 2.5, "f11": 3.5, "f2": 12.5, "f6": 500000, "f10": 1.5}
+                ]
+            }
+        }
+        mock_resp = MagicMock()
+        mock_resp.text = json.dumps(api_data)
+        mock_resp.status_code = 200
+
+        mock_session.get.return_value = mock_resp
+
+        with patch('cdp_fetch.proxy_utils.is_proxy_enabled', return_value=False), \
+             patch('cdp_fetch.proxy_utils.get_requests_session_with_proxy', return_value=mock_session), \
+             patch('cdp_fetch.parse_surge_data') as mock_parse, \
+             patch('cdp_fetch.save_surge_data', return_value="/tmp/test.json"):
+            mock_parse.return_value = [{"代码": "000001", "名称": "平安银行", "涨幅%": 2.5, "5分钟涨速%": 3.5, "最新价": 12.5, "成交额": 500000, "量比": 1.5}]
+            result = get_surge_rate_requests()
+            self.assertIsNotNone(result)
+
+    def test_requests_empty_data_retries(self):
+        """API返回空数据时应重试"""
+        import requests
+        mock_session = MagicMock(spec=requests.Session)
+        mock_session.headers = {"User-Agent": "test"}
+        mock_session.proxies = {"http": "http://1.2.3.4:8080", "https": "http://1.2.3.4:8080"}
+
+        # 第一次空数据，第二次有数据
+        empty_resp = MagicMock()
+        empty_resp.text = json.dumps({"data": {"diff": []}})
+        empty_resp.status_code = 200
+
+        api_data = {"data": {"diff": [{"f12": "000001", "f14": "平安银行", "f3": 2.5, "f11": 3.5, "f2": 12.5, "f6": 500000, "f10": 1.5}]}}
+        good_resp = MagicMock()
+        good_resp.text = json.dumps(api_data)
+        good_resp.status_code = 200
+
+        call_count = 0
+        def mock_get(url, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return empty_resp
+            return good_resp
+
+        mock_session.get.side_effect = mock_get
+
+        with patch('cdp_fetch.proxy_utils.is_proxy_enabled', return_value=True), \
+             patch('cdp_fetch.proxy_utils._cached_proxy', {
+                 "ip": "1.2.3.4", "port": 8080,
+                 "expires_at": time.time() + 100
+             }), \
+             patch('cdp_fetch.proxy_utils.get_requests_session_with_proxy', return_value=mock_session), \
+             patch('cdp_fetch.proxy_utils.get_proxy_ip', return_value="1.2.3.4:8080"), \
+             patch('cdp_fetch.parse_surge_data') as mock_parse, \
+             patch('cdp_fetch.save_surge_data', return_value="/tmp/test.json"), \
+             patch('time.sleep'):
+            mock_parse.return_value = [{"代码": "000001", "名称": "平安银行", "涨幅%": 2.5, "5分钟涨速%": 3.5, "最新价": 12.5, "成交额": 500000, "量比": 1.5}]
+            result = get_surge_rate_requests(max_retries=3)
+            self.assertIsNotNone(result)
+
+    def test_requests_all_retries_fail(self):
+        """所有重试都失败应返回None"""
+        import requests
+        mock_session = MagicMock(spec=requests.Session)
+        mock_session.headers = {"User-Agent": "test"}
+        mock_session.proxies = {"http": "http://1.2.3.4:8080", "https": "http://1.2.3.4:8080"}
+
+        mock_session.get.side_effect = requests.exceptions.ProxyError("Proxy failed")
+
+        with patch('cdp_fetch.proxy_utils.is_proxy_enabled', return_value=True), \
+             patch('cdp_fetch.proxy_utils._cached_proxy', {
+                 "ip": "1.2.3.4", "port": 8080,
+                 "expires_at": time.time() + 100
+             }), \
+             patch('cdp_fetch.proxy_utils.get_requests_session_with_proxy', return_value=mock_session), \
+             patch('cdp_fetch.proxy_utils.get_proxy_ip', return_value=None), \
+             patch('time.sleep'):
+            result = get_surge_rate_requests(max_retries=3)
+            self.assertIsNone(result)
+
+
 class TestGetSurgeRateCDP(unittest.TestCase):
     """完整流程（带mock）"""
 
     def test_non_trading_hours_returns_none(self):
         """非交易时段应返回None"""
         with patch('cdp_fetch.is_trading_hours', return_value=(False, "周末休市")):
-            result = get_surge_rate_cdp(skip_trading_check=False)
+            result = get_surge_rate_cdp(skip_trading_check=False, method="cdp_no_proxy")
             self.assertIsNone(result)
 
     def test_skip_trading_check_allowed(self):
-        """跳过交易检查时继续执行"""
+        """跳过交易检查时继续执行(cd_no_proxy方式)"""
         mock_ws = MagicMock()
         api_data = {
             "data": {
@@ -395,10 +524,10 @@ class TestGetSurgeRateCDP(unittest.TestCase):
              patch('cdp_fetch.navigate_and_fetch', return_value=api_data) as mock_nav, \
              patch('cdp_fetch.save_surge_data', return_value="/tmp/test.json") as mock_save, \
              patch('cdp_fetch.parse_surge_data') as mock_parse:
-            
+
             mock_parse.return_value = [{"代码": "000001", "名称": "平安银行", "涨幅%": 2.5, "5分钟涨速%": 3.5, "最新价": 12.5, "成交额": 500000, "量比": 1.5}]
-            result = get_surge_rate_cdp(skip_trading_check=True)
-            
+            result = get_surge_rate_cdp(skip_trading_check=True, method="cdp_no_proxy")
+
             # 验证跳过了交易时段检查
             mock_th.assert_not_called()
             # 验证执行了连接和导航
@@ -410,7 +539,7 @@ class TestGetSurgeRateCDP(unittest.TestCase):
         """CDP连接失败应返回None"""
         with patch('cdp_fetch.is_trading_hours', return_value=(True, None)), \
              patch('cdp_fetch.connect_cdp', return_value=(None, None)):
-            result = get_surge_rate_cdp(skip_trading_check=False)
+            result = get_surge_rate_cdp(skip_trading_check=False, method="cdp_no_proxy")
             self.assertIsNone(result)
 
     def test_navigate_failure_returns_none(self):
@@ -419,12 +548,12 @@ class TestGetSurgeRateCDP(unittest.TestCase):
         with patch('cdp_fetch.is_trading_hours', return_value=(True, None)), \
              patch('cdp_fetch.connect_cdp', return_value=(mock_ws, "test")), \
              patch('cdp_fetch.navigate_and_fetch', return_value=None):
-            result = get_surge_rate_cdp(skip_trading_check=False)
+            result = get_surge_rate_cdp(skip_trading_check=False, method="cdp_no_proxy")
             self.assertIsNone(result)
             mock_ws.close.assert_called()  # 确保WS被关闭
 
     def test_success_with_custom_retry_params(self):
-        """自定义重试参数应传递给连接和导航"""
+        """自定义重试参数应传递给连接和导航(cdp_no_proxy方式)"""
         mock_ws = MagicMock()
         api_data = {"data": {"diff": [{"f12": "000001", "f14": "万科", "f3": 1, "f11": 2, "f2": 10, "f6": 100, "f10": 1}]}}
 
@@ -433,11 +562,12 @@ class TestGetSurgeRateCDP(unittest.TestCase):
              patch('cdp_fetch.navigate_and_fetch', return_value=api_data) as mock_nav, \
              patch('cdp_fetch.parse_surge_data', return_value=[]), \
              patch('cdp_fetch.save_surge_data', return_value="/tmp/test.json"):
-            
+
             get_surge_rate_cdp(
                 skip_trading_check=True,
                 connect_retries=5,
                 navigate_retries=3,
+                method="cdp_no_proxy",
             )
             
             mock_conn.assert_called_once_with(max_retries=5, retry_interval=2)

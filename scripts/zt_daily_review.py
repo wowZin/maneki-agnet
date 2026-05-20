@@ -38,6 +38,11 @@ TUSHARE_TOKEN = CONFIG.get("TUSHARE_TOKEN", "")
 FEISHU_APP_ID = CONFIG.get("FEISHU_APP_ID", "")
 FEISHU_APP_SECRET = CONFIG.get("FEISHU_APP_SECRET", "")
 FEISHU_CHAT_ID_REPORT = CONFIG.get("FEISHU_CHAT_ID_REPORT", "")
+FEISHU_TEST_MODE = CONFIG.get("FEISHU_TEST_MODE", "").lower() == "true"
+
+def feishu_title_prefix():
+    """测试模式下返回'测试-'前缀"""
+    return "测试-" if FEISHU_TEST_MODE else ""
 
 def safe_float(val) -> float:
     """安全转换为float，None/空/异常返回0.0"""
@@ -98,36 +103,82 @@ def load_today_analysis(today: str) -> tuple:
     """
     读取data/analysis下今天的所有分析文件。
     返回 (all_analysis, pushed_analysis)：
-      - all_analysis: 全部分析结果（用于维度统计和置信度分布）
-      - pushed_analysis: 综合分>=50的推送候选（用于命中率计算）
-    每只股票取各时段最高分版本。
+      - all_analysis: 全部分析结果（每只股票取最佳分数版本，用于维度统计和置信度分布）
+      - pushed_analysis: 今日实际推送给用户的股票（累加去重，用于命中率计算）
+    推送定义：综合分>=50全部推送，或无>=50时前5只（降级兜底）。
+    推送池构建方式：每个时段独立应用推送规则，然后跨时段累加去重。
     """
     analysis_dir = PROJECT_DIR / "data" / "analysis"
-    stock_best = {}
-    
-    for f in analysis_dir.glob(f"{today}*.json"):
+    stock_best = {}  # 每只股票取最佳分数版本（用于全量统计）
+
+    # 按时段读取分析文件，每个文件独立应用推送规则
+    per_slot_pushed = []  # 各时段推送结果的累加
+    for f in sorted(analysis_dir.glob(f"{today}*.json")):
         try:
             with open(f) as fp:
                 data = json.load(fp)
             if not isinstance(data, list):
                 continue
+            # 汇入全量分析（取每只股票最佳分数版本）
             for item in data:
                 code = item.get("code", "")
                 total = item.get("total", 0) or 0
                 if code not in stock_best or total > stock_best[code].get("total", 0):
                     stock_best[code] = item
+            # 对本时段独立应用推送规则
+            above_50 = [item for item in data if item.get("total", 0) >= 50]
+            if above_50:
+                slot_push = above_50
+            else:
+                slot_push = sorted(data, key=lambda x: x.get("total", 0), reverse=True)[:5]
+            per_slot_pushed.extend(slot_push)
         except Exception as e:
             print(f"读取分析文件失败 {f}: {e}")
-    
+
     all_items = list(stock_best.values())
-    pushed = [item for item in all_items if item.get("total", 0) >= 50]
-    
+
+    # 优先从data/pushed/目录读取实际推送记录（最权威）
+    pushed_dir = PROJECT_DIR / "data" / "pushed"
+    pushed_items = []
+    if pushed_dir.exists():
+        for pf in pushed_dir.glob(f"{today}*.json"):
+            try:
+                with open(pf) as fp:
+                    pushed_data = json.load(fp)
+                if isinstance(pushed_data, list):
+                    pushed_items.extend(pushed_data)
+            except Exception as e:
+                print(f"读取推送记录失败 {pf}: {e}")
+
+    if pushed_items:
+        # 推送记录存在，取每只股票最佳分数版本去重
+        pushed_best = {}
+        for item in pushed_items:
+            code = item.get("code", "")
+            total = item.get("total", 0) or 0
+            if code not in pushed_best or total > pushed_best[code].get("total", 0):
+                pushed_best[code] = item
+        pushed = list(pushed_best.values())
+        print(f"从推送记录获取: {len(pushed)}只")
+    elif per_slot_pushed:
+        # 无推送记录，用各时段推送结果累加去重（重建推送池）
+        pushed_best = {}
+        for item in per_slot_pushed:
+            code = item.get("code", "")
+            total = item.get("total", 0) or 0
+            if code not in pushed_best or total > pushed_best[code].get("total", 0):
+                pushed_best[code] = item
+        pushed = list(pushed_best.values())
+        print(f"从分析结果重建推送池(累加去重): {len(pushed)}只")
+    else:
+        pushed = []
+
     # 标记推送状态
     pushed_codes_set = set(item.get("code", "") for item in pushed)
     for item in all_items:
         item["is_pushed"] = item.get("code", "") in pushed_codes_set
-    
-    print(f"全量分析: {len(all_items)}只, 推送池(>=50分): {len(pushed)}只")
+
+    print(f"全量分析: {len(all_items)}只, 推送数据: {len(pushed)}只")
     return all_items, pushed
 
 # ===== 4. 获取当日涨停股票 =====
@@ -243,7 +294,7 @@ def calculate_hits(predicted_signals: list, actual_limit: list) -> dict:
     """
     计算预测命中率
     predicted_signals: 当日所有信号文件中的股票（去重）
-    actual_limit: 当日实际涨停列表
+    actual_limit: 当日大盘涨停列表
     """
     # 提取所有被推荐过的股票代码（去重）
     predicted_codes = set()
@@ -342,7 +393,7 @@ def send_feishu_report(report: dict):
     card = {
         "config": {"wide_screen_mode": True},
         "header": {
-            "title": {"tag": "plain_text", "content": "📊 涨停预测日报复盘"},
+            "title": {"tag": "plain_text", "content": f"{feishu_title_prefix()}📊 涨停预测日报复盘"},
             "template": "blue"
         },
         "elements": [
@@ -350,13 +401,13 @@ def send_feishu_report(report: dict):
                 "tag": "div",
                 "fields": [
                     {"is_short": True, "text": {"tag": "lark_md", "content": f"**日期**\n{report['date']}"}},
-                    {"is_short": True, "text": {"tag": "lark_md", "content": f"**预测信号**\n{report['predicted_count']}只"}}
+                    {"is_short": True, "text": {"tag": "lark_md", "content": f"**推送信号**\n{report['pushed_count']}只"}}
                 ]
             },
             {
                 "tag": "div",
                 "fields": [
-                    {"is_short": True, "text": {"tag": "lark_md", "content": f"**实际涨停**\n{report['actual_limit_count']}只"}},
+                    {"is_short": True, "text": {"tag": "lark_md", "content": f"**大盘涨停**\n{report['cumulative_limit_count']}只"}},
                     {"is_short": True, "text": {"tag": "lark_md", "content": f"**命中数量**\n{report['hit_count']}只"}}
                 ]
             },
@@ -412,24 +463,24 @@ def send_feishu_report(report: dict):
 def generate_markdown_report(report: dict) -> str:
     """生成人类可读的Markdown格式复盘报告"""
     date = report['date']
-    predicted = report['predicted_count']
-    actual = report['actual_limit_count']
+    pushed = report['pushed_count']
+    cumulative = report['cumulative_limit_count']
     hit = report['hit_count']
     rate = report['hit_rate']
     hit_codes = report.get('hit_codes', [])
     miss_codes = report.get('miss_codes', [])
     dim_perf = report.get('dim_performance', {})
     conf_dist = report.get('confidence_dist', {})
-    
+
     lines = []
-    lines.append(f"# 📊 涨停预测复盘报告 — {date}")
+    lines.append(f"# 涨停预测复盘报告 — {date}")
     lines.append("")
-    lines.append("## 📈 核心指标")
+    lines.append("## 核心指标")
     lines.append("")
     lines.append(f"| 指标 | 数值 |")
     lines.append(f"|------|------|")
-    lines.append(f"| 今日推荐股票（去重） | **{predicted}** 只 |")
-    lines.append(f"| 今日实际涨停 | **{actual}** 只 |")
+    lines.append(f"| 今日推送股票 | **{pushed}** 只 |")
+    lines.append(f"| 大盘涨停 | **{cumulative}** 只 |")
     lines.append(f"| 命中涨停 | **{hit}** 只 |")
     lines.append(f"| 命中率 | **{rate:.1f}%** |")
     lines.append("")
@@ -503,9 +554,9 @@ def generate_markdown_report(report: dict) -> str:
     elif rate > 0:
         lines.append(f"今日命中率 **{rate:.1f}%**，表现一般。仅命中 {hit} 只涨停股，建议关注各维度评分阈值。")
     else:
-        lines.append(f"今日命中率 **0%**，未命中任何涨停股。推荐池 {predicted} 只，实际涨停 {actual} 只。")
+        lines.append(f"今日命中率 **0%**，未命中任何涨停股。推送 {pushed} 只，大盘涨停 {cumulative} 只。")
         if actual == 0:
-            lines.append("注：当日实际涨停数为0，可能为市场整体低迷或数据获取异常。")
+            lines.append("注：当日大盘涨停数为0，可能为市场整体低迷或数据获取异常。")
     lines.append("")
     
     lines.append("---")
@@ -530,28 +581,20 @@ def main():
     
     # Step 3: 汇总分析结果
     all_analysis, pushed_analysis = load_today_analysis(today)
-    print(f"今日全量分析结果: {len(all_analysis)}条, 推送池: {len(pushed_analysis)}条")
+    print(f"今日全量分析结果: {len(all_analysis)}条, 推送数据: {len(pushed_analysis)}条")
     
     # Step 4: 获取涨停列表
     limit_ups = get_today_limit_up(today)
-    print(f"今日实际涨停: {len(limit_ups)}只")
+    print(f"今日大盘涨停: {len(limit_ups)}只")
     
-    # Step 5: 计算命中（以推送池为预测池，若无推送池则用全量分析）
+    # Step 5: 计算命中（以推送数据为预测池）
     pushed_codes = set()
-    # 优先用推送池(>=50分)作为预测池
     for item in pushed_analysis:
         code = item.get("code", "")
         if code:
             pushed_codes.add(code)
-    
-    # 如果推送池为空，用全量分析作为预测池
-    if not pushed_codes:
-        for item in all_analysis:
-            code = item.get("code", "")
-            if code:
-                pushed_codes.add(code)
-    
-    # 如果全量分析也空，fallback到信号文件
+
+    # 如果推送数据为空，fallback到信号文件
     if not pushed_codes:
         for p in signals:
             code = p.get("ts_code") or p.get("code") or p.get("代码", "")
@@ -561,19 +604,19 @@ def main():
                 else:
                     code = f"{code}.SZ"
             pushed_codes.add(code)
-    
+
     actual_codes = set(limit_ups)
     hits_set = pushed_codes & actual_codes
-    
+
     hits = {
-        "predicted_count": len(pushed_codes),
-        "actual_limit_count": len(actual_codes),
+        "pushed_count": len(pushed_codes),
+        "cumulative_limit_count": len(actual_codes),
         "hit_count": len(hits_set),
         "hit_rate": len(hits_set) / len(pushed_codes) * 100 if pushed_codes else 0,
         "hit_codes": list(hits_set),
         "miss_codes": list(pushed_codes - actual_codes)
     }
-    print(f"命中情况: {hits['hit_count']}/{hits['predicted_count']} ({hits['hit_rate']:.1f}%)")
+    print(f"命中情况: 推送{hits['pushed_count']}只中命中{hits['hit_count']}只 ({hits['hit_rate']:.1f}%)")
     
     # 标记全量分析结果中的命中
     hit_codes = set(hits["hit_codes"])
@@ -590,8 +633,8 @@ def main():
     # Step 8: 生成报告
     report = {
         "date": today,
-        "predicted_count": hits["predicted_count"],
-        "actual_limit_count": hits["actual_limit_count"],
+        "pushed_count": hits["pushed_count"],
+        "cumulative_limit_count": hits["cumulative_limit_count"],
         "hit_count": hits["hit_count"],
         "hit_rate": hits["hit_rate"],
         "hit_codes": hits["hit_codes"],

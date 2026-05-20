@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """
-通过CDP连接Chrome，直接调用东方财富行情API获取涨速数据
+通过CDP连接Chrome，直接调用东方财富行情API获取涨速数据（集成代理）
 不需要拦截请求，直接用Chrome的session发请求即可
 """
 import json
-import urllib.request
 import os
+import sys
+import urllib.request
 from datetime import datetime
+from pathlib import Path
+
+# 添加scripts目录到sys.path以便导入proxy_utils
+sys.path.insert(0, str(Path(__file__).parent))
+import proxy_utils
 
 # 东方财富A股实时行情API（公开接口，无需登录）
 # 按涨跌幅降序
@@ -14,7 +20,7 @@ EASTMONEY_API = "https://push2.eastmoney.com/api/qt/clist/get"
 
 def fetch_em_stocks(page=1, page_size=100, sort_field="f3", sort_order="desc"):
     """
-    获取东方财富A股行情数据
+    获取东方财富A股行情数据（支持代理）
     f3=涨跌幅, f2=最新价, f12=代码, f14=名称, f15=最高, f16=最低, f17=今开
     f6=成交额, f5=涨跌幅(幅度), f8=换手率, f10=量比
     """
@@ -30,18 +36,24 @@ def fetch_em_stocks(page=1, page_size=100, sort_field="f3", sort_order="desc"):
         "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23",  # 沪深A股
         "fields": "f2,f3,f4,f5,f6,f7,f8,f10,f12,f14,f15,f16,f17,f18"
     }
-    
+
     query = "&".join(f"{k}={v}" for k, v in params.items())
     url = f"{EASTMONEY_API}?{query}"
-    
+
     req = urllib.request.Request(url, headers={
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
         "Referer": "https://quote.eastmoney.com/"
     })
-    
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        data = json.loads(resp.read().decode('utf-8'))
-    
+
+    # 代理启用时使用proxy opener，否则直连
+    opener = proxy_utils.get_urllib_opener_with_proxy()
+    if opener:
+        with opener.open(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+    else:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+
     return data
 
 print("=== 涨速扫描 (东方财富API) ===")

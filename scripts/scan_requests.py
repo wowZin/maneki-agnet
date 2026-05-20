@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
-"""使用requests获取东方财富涨速数据"""
+"""使用requests获取东方财富涨速数据（集成代理）"""
 import json
+import os
 import re
+import sys
 import time
 from datetime import datetime
+from pathlib import Path
+
+# 添加scripts目录到sys.path以便导入proxy_utils
+sys.path.insert(0, str(Path(__file__).parent))
+import proxy_utils
 
 try:
     import requests
@@ -12,7 +19,7 @@ except ImportError:
     subprocess.check_call(['pip3', 'install', 'requests', '-q'])
     import requests
 
-print("=== 5分钟涨速扫描 (requests) ===")
+print("=== 5分钟涨速扫描 (requests+代理) ===")
 print(f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 print()
 
@@ -26,17 +33,8 @@ api_url = (
     "ut=fa5fd1943c7b386f172d6893dbfba10b&cb="
 )
 
-headers = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Referer': 'https://quote.eastmoney.com/',
-    'Accept': '*/*',
-    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-    'Connection': 'keep-alive',
-}
-
 print("Step 1: 请求东方财富API...")
-session = requests.Session()
-session.headers.update(headers)
+session = proxy_utils.get_requests_session_with_proxy()
 
 for attempt in range(3):
     try:

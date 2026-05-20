@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-"""直接HTTP请求获取东方财富涨速数据（备用方案）"""
+"""直接HTTP请求获取东方财富涨速数据（集成代理）"""
 import json
+import os
+import sys
 import urllib.request
 import re
 import time
 from datetime import datetime
+from pathlib import Path
 
-print("=== 5分钟涨速扫描 (HTTP直连) ===")
+# 添加scripts目录到sys.path以便导入proxy_utils
+sys.path.insert(0, str(Path(__file__).parent))
+import proxy_utils
+
+print("=== 5分钟涨速扫描 (HTTP+代理) ===")
 print(f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 print()
 
@@ -22,6 +29,9 @@ api_url = (
 )
 
 print("Step 1: 请求东方财富API...")
+# 代理启用时使用proxy opener，否则用直连
+opener = proxy_utils.get_urllib_opener_with_proxy()
+
 for attempt in range(3):
     try:
         req = urllib.request.Request(
@@ -32,7 +42,10 @@ for attempt in range(3):
                 'Accept': '*/*'
             }
         )
-        response = urllib.request.urlopen(req, timeout=30)
+        if opener:
+            response = opener.open(req, timeout=30)
+        else:
+            response = urllib.request.urlopen(req, timeout=30)
         content = response.read().decode('utf-8')
         break
     except Exception as e:

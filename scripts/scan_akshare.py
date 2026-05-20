@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""涨停预测 - 盘中扫描脚本 (akshare实时数据 + CDP涨速)
+"""涨停预测 - 盘中扫描脚本 (akshare实时数据 + requests代理获取涨速)
 数据源分工：
-- 涨速: Chrome CDP 东方财富API (f11字段)
+- 涨速: requests+代理 东方财富API (f11字段) 优先，CDP备选
 - 其他实时数据: akshare (行情/资金流/板块)
 - 交易日历: Tushare trade_cal (仅判断交易日)
 - 基本面/历史: Tushare REST API (T+1)
@@ -11,11 +11,16 @@ akshare安装: pip install akshare
 import json
 import os
 import re
+import sys
 from datetime import datetime, timedelta
-import urllib.request
+from pathlib import Path
+
+# 添加scripts目录到sys.path以便导入proxy_utils
+sys.path.insert(0, str(Path(__file__).parent))
+import proxy_utils
 
 # Tushare用于交易日判断（仅需token）
-TUSHARE_TOKEN = "ebba208f5d60f9e86a1fcb39cf6dad5dca63c5288e82637ad59c5ac7"
+TUSHARE_TOKEN = os.getenv("TUSHARE_TOKEN", "")
 
 def tushare_api(api_name, params=None):
     """调用 Tushare REST API（仅用于交易日历等非实时数据）"""
@@ -40,34 +45,88 @@ def tushare_api(api_name, params=None):
     return [dict(zip(fields, item)) for item in items]
 
 def get_surge_rate_cdp():
-    """通过 Chrome CDP 请求东方财富API获取5分钟涨速
+    """通过 requests+代理 请求东方财富API获取5分钟涨速（主方式）
+    失败时降级为 urllib 代理方式
     返回: [{code, name, surge_rate_5min, pct_change, ...}]
     """
-    import json
+    # 方式1: requests+代理（推荐）
+    if proxy_utils.is_proxy_enabled():
+        try:
+            import requests
+            session = proxy_utils.get_requests_session_with_proxy()
+            url = ("https://push2.eastmoney.com/api/qt/clist/get?"
+                   "pn=1&pz=500&po=1&np=1&fltt=2&invt=2&fid=f11&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23&"
+                   "fields=f12,f14,f3,f2,f11,f5,f6,f8,f15,f16,f17")
+
+            resp = session.get(url, timeout=15)
+            data = json.loads(resp.text)
+
+            diff = data.get("data", {}).get("diff", [])
+            result = []
+            for item in diff:
+                code = str(item.get("f12", ""))
+                name = str(item.get("f14", ""))
+                surge = item.get("f11", 0)
+                pct = item.get("f3", 0)
+                price = item.get("f2", 0)
+                vol = item.get("f5", 0)
+                amount = item.get("f6", 0)
+                turnover = item.get("f8", 0)
+
+                if surge is None or pct is None:
+                    continue
+                try:
+                    surge = float(surge)
+                    pct = float(pct)
+                except:
+                    continue
+
+                result.append({
+                    "code": code,
+                    "name": name,
+                    "surge_rate_5min": surge,
+                    "pct_change": pct,
+                    "price": price,
+                    "volume": vol,
+                    "amount": amount,
+                    "turnover_rate": turnover,
+                })
+            return result
+        except Exception as e:
+            print(f"requests+代理获取涨速失败: {e}，降级为urllib方式")
+
+    # 方式2: urllib请求（无代理或代理失败降级）
     url = ("https://push2.eastmoney.com/api/qt/clist/get?"
            "pn=1&pz=500&po=1&np=1&fltt=2&invt=2&fid=f11&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23&"
            "fields=f12,f14,f3,f2,f11,f5,f6,f8,f15,f16,f17")
-    
+
     try:
         req = urllib.request.Request(url, headers={
             "User-Agent": "Mozilla/5.0",
             "Referer": "https://quote.eastmoney.com/"
         })
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-        
+        # 尝试用urllib代理opener
+        opener = proxy_utils.get_urllib_opener_with_proxy()
+        if opener:
+            with opener.open(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+        else:
+            import urllib.request as urllib_req
+            with urllib_req.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+
         diff = data.get("data", {}).get("diff", [])
         result = []
         for item in diff:
             code = str(item.get("f12", ""))
             name = str(item.get("f14", ""))
-            surge = item.get("f11", 0)  # 5分钟涨速
-            pct = item.get("f3", 0)     # 涨幅%
-            price = item.get("f2", 0)   # 最新价
-            vol = item.get("f5", 0)     # 成交量(手)
-            amount = item.get("f6", 0)  # 成交额
-            turnover = item.get("f8", 0) # 换手率
-            
+            surge = item.get("f11", 0)
+            pct = item.get("f3", 0)
+            price = item.get("f2", 0)
+            vol = item.get("f5", 0)
+            amount = item.get("f6", 0)
+            turnover = item.get("f8", 0)
+
             if surge is None or pct is None:
                 continue
             try:
@@ -75,7 +134,7 @@ def get_surge_rate_cdp():
                 pct = float(pct)
             except:
                 continue
-            
+
             result.append({
                 "code": code,
                 "name": name,
@@ -88,7 +147,7 @@ def get_surge_rate_cdp():
             })
         return result
     except Exception as e:
-        print(f"CDP获取涨速失败: {e}")
+        print(f"urllib获取涨速失败: {e}")
         return None
 
 def get_realtime_quotes_akshare():

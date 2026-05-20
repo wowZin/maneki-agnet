@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
-"""通过Chrome CDP获取东方财富涨速数据 - 直接导航到API URL
+"""通过Chrome CDP获取东方财富涨速数据 - 直接导航到API URL（集成代理）
 
 [DEPRECATED] 本脚本已被 cdp_fetch.py 替代。
   - cdp_fetch.py 提供更完善的重试逻辑、模块化设计、数据解析和存储功能
-  - 请使用: python scripts/cdp_fetch.py --skip-trading-check (或其他参数)
+  - 请使用: python scripts/cdp_fetch.py --method requests (推荐) 或 --method cdp
   - 如需作为模块导入: from cdp_fetch import get_surge_rate_cdp, parse_surge_data, save_surge_data
   - 本脚本仅保留作为参考，不再维护
 """
 import json
+import os
+import sys
 import urllib.request
 import re
 import warnings
+from pathlib import Path
+
+# 添加scripts目录到sys.path以便导入proxy_utils
+sys.path.insert(0, str(Path(__file__).parent))
 
 warnings.warn(
     "scan_cdp.py 已废弃，请使用 cdp_fetch.py 替代。"
@@ -22,6 +28,7 @@ warnings.warn(
 import websocket
 import time
 from datetime import datetime
+import proxy_utils
 
 def is_trading_hours():
     """检查当前是否在交易时段内（9:30-11:30, 13:00-15:00）"""
@@ -50,11 +57,25 @@ if not trading:
     exit(0)
 
 print("Step 1: 连接Chrome CDP...")
+
+# 代理启用时：启动带代理的Chromium
+proc = None
+if proxy_utils.is_proxy_enabled():
+    proxy_addr = proxy_utils.get_proxy_ip()
+    if proxy_addr:
+        proc = proxy_utils.launch_chromium_with_proxy(proxy_addr)
+        if proc:
+            print(f"  已启动带代理的Chromium (代理: {proxy_addr})")
+        else:
+            print("  Chromium+代理启动失败，降级直连")
+
+# 获取CDP目标列表
 try:
     targets = json.loads(urllib.request.urlopen("http://localhost:9222/json/list", timeout=5).read())
 except Exception as e:
-    print(f"  连接失败: {e}")
-    print("  请确保Chrome已启动: open -a 'Google Chrome' --args --remote-debugging-port=9222")
+    print(f"  CDP目标列表获取失败: {e}")
+    if proc:
+        proxy_utils.kill_chromium(proc)
     exit(1)
 
 page_target = None
@@ -221,3 +242,7 @@ out_file = f"{data_dir}/{today}_{time_str}.json"
 with open(out_file, "w", encoding="utf-8") as f:
     json.dump(output, f, ensure_ascii=False, indent=2)
 print(f"\n已保存: {out_file}")
+
+# 清理：如果使用了代理Chromium，终止进程
+if proc:
+    proxy_utils.kill_chromium(proc)

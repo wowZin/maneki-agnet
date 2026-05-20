@@ -8,23 +8,26 @@
 
 | 场景 | 数据源 | 接口 | 原因 |
 |------|--------|------|------|
-| 盘中扫描 | 东方财富 CDP | push2.eastmoney.com API | 实时涨速、分钟级行情 |
-| 盘中分析 | 东方财富 CDP | 同上 | 当日实时数据，Tushare盘中无数据 |
+| 盘中扫描 | requests+代理 → 东方财富API | push2.eastmoney.com API | 实时涨速、分钟级行情，代理绕过IP封锁 |
+| 盘中扫描(CDP备选) | CDP+代理 → 东方财富API | push2.eastmoney.com API | requests+代理失败时降级方式 |
+| 盘中分析 | requests+代理/CDP+代理 | 同上 | 当日实时数据，Tushare盘中无数据 |
 | 收盘复盘 | Tushare REST API | api.tushare.pro | 历史数据完整，收盘后更新 |
 
-**注意：Tushare daily/bak_daily/moneyflow 等接口都是 T+1 更新，收盘后才入库。盘中调用返回的是前一天数据，分析结论会出错。盘中分析必须用 CDP 实时数据。**
+**代理IP服务**: 使用动态代理(zdtps.com)绕过东方财富IP封锁。`.env`配置`PROXY_ENABLED=true`启用，代理模块`scripts/proxy_utils.py`提供统一接口。代理IP有效期约130秒，自动刷新。
+
+**注意：Tushare daily/bak_daily/moneyflow 等接口都是 T+1 更新，收盘后才入库。盘中调用返回的是前一天数据，分析结论会出错。盘中分析必须用代理实时数据。**
 
 ### 盘中实时数据获取映射表
 
 | 所需数据 | Tushare(T+1) | 盘中替代方案 | 获取方式 |
 |---------|-------------|------------|---------|
-| 量比/换手/均线 | stk_factor_pro | 东方财富CDP实时行情 | Chrome CDP push2.eastmoney.com |
-| 资金流向 | moneyflow | 东方财富CDP实时资金 | Chrome CDP push2.eastmoney.com |
-| 涨停家数/炸板率 | limit_list_d | 东方财富CDP板块数据 | Chrome CDP push2.eastmoney.com |
+| 量比/换手/均线 | stk_factor_pro | requests+代理→东方财富API | push2.eastmoney.com (代理绕封锁) |
+| 资金流向 | moneyflow | requests+代理→东方财富CDP实时资金 | push2.eastmoney.com (代理绕封锁) |
+| 涨停家数/炸板率 | limit_list_d | requests+代理→东方财富CDP板块数据 | push2.eastmoney.com (代理绕封锁) |
 | 龙虎榜 | top_list | 不可用(T+1) | 盘中跳过或用大单流向代理 |
 | 北向资金 | hk_hold | 不可用(已停实时披露) | 盘中跳过 |
 | 人气排名 | (无) | 同花顺/东财热榜 | akshare stock_fund_flow_individual |
-| 概念板块热度 | concept_detail | 东方财富概念板块 | Chrome CDP + akshare |
+| 概念板块热度 | concept_detail | 东方财富概念板块 | requests+代理 + akshare |
 
 ### 全系统股票过滤规则（所有Agent共用）
 
@@ -65,10 +68,12 @@
 你是整合汇总 Agent，不独立进行行情研判，专职接收各个独立分析 Agent 的研判结果，统一记录信息、按照预设置信度权重加权计算个股涨停综合置信分数，统筹多维度结论、合并风险点，完成最终涨停概率汇总，并晚盘结束后自动生成今日复盘总结文档。
 
 **关键行为约束（LLM必须遵守）**：
-- 推送决策：综合分>=50 的股票进入推送池，真正推送给用户；<50 的不推送。
-- 复盘预测池：以"**推送池（综合分>=50，去重）**"为预测集合，对比当日实际涨停列表计算命中。禁止用全部扫描信号作为预测池。
-- 涨停数据源：必须使用 Tushare `limit_list_d` 接口获取实际涨停（`limit_list` 数据不全，禁止用于复盘）。
-- 报告格式：复盘同时生成 JSON（程序读取）和 Markdown（人类可读）两份报告，存放于 `data/reports/YYYYMMDD.{json,md}`。
+- 推送决策：综合分>=50的股票全部推送；无>=50分时推送前5只（降级兜底）
+- 复盘预测池：以**今日实际推送给用户的数据**为预测集合，而非全部扫描信号。推送记录保存在 `data/pushed/`
+- 命中率：命中率 = 推送数据中涨停数 / 推送数据总数
+- 涨停数据源：必须使用 Tushare `limit_list_d` 接口获取实际涨停（`limit_list` 数据不全，禁止用于复盘）
+- 报告格式：复盘同时生成 JSON（程序读取）和 Markdown（人类可读）两份报告，存放于 `data/reports/YYYYMMDD.{json,md}`
+- 报告字段：推送信号数、大盘涨停数、命中涨停数、命中率
 
 详情设计参考: [Team Leader 设计](./agent-leader.md)
 

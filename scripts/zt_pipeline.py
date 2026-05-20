@@ -36,6 +36,12 @@ def load_env():
 
 CONFIG = load_env()
 
+# ===== Feishu 测试模式 =====
+FEISHU_TEST_MODE = CONFIG.get("FEISHU_TEST_MODE", "").lower() == "true"
+def feishu_title_prefix():
+    """测试模式下返回'测试-'前缀"""
+    return "测试-" if FEISHU_TEST_MODE else ""
+
 # ===== Agent 权重配置（从.env读取，默认=1） =====
 AGENT_WEIGHTS = {
     "fundamental": float(CONFIG.get("AGENT_WEIGHT_FUNDAMENTAL", "1")),
@@ -2486,9 +2492,36 @@ def score_sentiment(code):
 
 # ===== 6. 飞书推送 =====
 def push_feishu(results):
-    """发送飞书卡片"""
+    """发送飞书卡片
+
+    推送规则：
+    - 综合分>=50的股票全部推送
+    - 如果没有>=50的股票，推送前5只（降级兜底）
+    - 推送记录保存到 data/pushed/ 目录，供复盘使用
+    """
     import requests
-    
+
+    # 推送筛选
+    above_50 = [r for r in results if r.get('total', 0) >= 50]
+    if above_50:
+        push_list = above_50
+        print(f"  推送池: {len(above_50)}只(综合分>=50)")
+    else:
+        push_list = results[:5]
+        print(f"  无>=50分股票，降级推送前5只")
+
+    if not push_list:
+        print("  无可推送股票")
+        return False
+
+    # 保存推送记录（供复盘使用）
+    pushed_dir = PROJECT_DIR / "data" / "pushed"
+    pushed_dir.mkdir(parents=True, exist_ok=True)
+    pushed_file = pushed_dir / f"{datetime.now().strftime('%Y%m%d_%H%M')}.json"
+    with open(pushed_file, "w") as f:
+        json.dump(push_list, f, ensure_ascii=False, indent=2)
+    print(f"  推送记录已保存: {pushed_file}")
+
     # 获取token
     resp = requests.post(
         "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
@@ -2499,22 +2532,22 @@ def push_feishu(results):
     )
     _feishu_resp = resp.json()
     token = _feishu_resp.get("tenant_access_token")
-    
+
     if not token:
         print("飞书token获取失败")
         return False
-    
+
     # 构建卡片
     card = {
         "config": {"wide_screen_mode": True},
         "header": {
-            "title": {"tag": "plain_text", "content": f"🎯 涨停预测信号 ({datetime.now().strftime('%Y-%m-%d %H:%M')})"},
+            "title": {"tag": "plain_text", "content": f"{feishu_title_prefix()}涨停预测信号 ({datetime.now().strftime('%Y-%m-%d %H:%M')})"},
             "template": "blue"
         },
         "elements": []
     }
-    
-    for r in results[:10]:  # 只推送前10
+
+    for r in push_list:
         element = {
             "tag": "div",
             "text": {
@@ -2523,7 +2556,7 @@ def push_feishu(results):
             }
         }
         card["elements"].append(element)
-    
+
     # 发送
     resp = requests.post(
         "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id",
@@ -2534,7 +2567,7 @@ def push_feishu(results):
             "content": json.dumps(card)
         }
     )
-    
+
     result = resp.json()
     if result.get("code") == 0:
         print(f"飞书推送成功: {result['data']['message_id']}")
