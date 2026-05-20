@@ -1,8 +1,24 @@
 #!/usr/bin/env python3
-"""通过Chrome CDP获取东方财富涨速数据 - 直接导航到API URL"""
+"""通过Chrome CDP获取东方财富涨速数据 - 直接导航到API URL
+
+[DEPRECATED] 本脚本已被 cdp_fetch.py 替代。
+  - cdp_fetch.py 提供更完善的重试逻辑、模块化设计、数据解析和存储功能
+  - 请使用: python scripts/cdp_fetch.py --skip-trading-check (或其他参数)
+  - 如需作为模块导入: from cdp_fetch import get_surge_rate_cdp, parse_surge_data, save_surge_data
+  - 本脚本仅保留作为参考，不再维护
+"""
 import json
 import urllib.request
 import re
+import warnings
+
+warnings.warn(
+    "scan_cdp.py 已废弃，请使用 cdp_fetch.py 替代。"
+    "作为模块导入: from cdp_fetch import get_surge_rate_cdp; "
+    "作为脚本运行: python scripts/cdp_fetch.py",
+    DeprecationWarning,
+    stacklevel=2
+)
 import websocket
 import time
 from datetime import datetime
