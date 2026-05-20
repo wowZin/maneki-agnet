@@ -14,6 +14,7 @@ import requests
 from datetime import datetime, date
 from pathlib import Path
 from collections import defaultdict
+from typing import Optional
 
 # 项目根目录
 PROJECT_DIR = Path(__file__).parent.parent
@@ -37,6 +38,15 @@ TUSHARE_TOKEN = CONFIG.get("TUSHARE_TOKEN", "")
 FEISHU_APP_ID = CONFIG.get("FEISHU_APP_ID", "")
 FEISHU_APP_SECRET = CONFIG.get("FEISHU_APP_SECRET", "")
 FEISHU_CHAT_ID_REPORT = CONFIG.get("FEISHU_CHAT_ID_REPORT", "")
+
+def safe_float(val) -> float:
+    """安全转换为float，None/空/异常返回0.0"""
+    if val is None or val == '' or val == 'None':
+        return 0.0
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return 0.0
 
 # ===== 1. 检查交易日 =====
 def is_trade_day(check_date: str) -> bool:
@@ -83,11 +93,14 @@ def load_today_signals(today: str) -> list:
     
     return all_signals
 
-# ===== 3. 汇总当日分析结果（仅取推送池：综合分>=50） =====
-def load_today_analysis(today: str) -> list:
+# ===== 3. 汇总当日分析结果 =====
+def load_today_analysis(today: str) -> tuple:
     """
     读取data/analysis下今天的所有分析文件。
-    只返回综合分>=50的推送候选（即真正可能推送给用户的股票）。
+    返回 (all_analysis, pushed_analysis)：
+      - all_analysis: 全部分析结果（用于维度统计和置信度分布）
+      - pushed_analysis: 综合分>=50的推送候选（用于命中率计算）
+    每只股票取各时段最高分版本。
     """
     analysis_dir = PROJECT_DIR / "data" / "analysis"
     stock_best = {}
@@ -106,32 +119,123 @@ def load_today_analysis(today: str) -> list:
         except Exception as e:
             print(f"读取分析文件失败 {f}: {e}")
     
-    # 只保留综合分>=50的推送候选
-    pushed = [item for item in stock_best.values() if item.get("total", 0) >= 50]
-    return pushed
+    all_items = list(stock_best.values())
+    pushed = [item for item in all_items if item.get("total", 0) >= 50]
+    
+    # 标记推送状态
+    pushed_codes_set = set(item.get("code", "") for item in pushed)
+    for item in all_items:
+        item["is_pushed"] = item.get("code", "") in pushed_codes_set
+    
+    print(f"全量分析: {len(all_items)}只, 推送池(>=50分): {len(pushed)}只")
+    return all_items, pushed
 
 # ===== 4. 获取当日涨停股票 =====
 def get_today_limit_up(today: str) -> list:
-    """用Tushare limit_list_d获取当日涨停股票（limit_list数据不全，用_d后缀的日度接口）"""
+    """
+    获取当日涨停股票列表，过滤条件与pipeline一致：
+    - 排除 ST/*ST
+    - 排除 创业板(300xxx) / 科创板(688xxx) / 北交所(8xxx/4xxx)
+    - 主板非ST涨停: pct >= 9.9%
+    策略：优先用daily接口(实时可用)，降级用limit_list_d(T+1延迟)。
+    """
     url = "http://api.tushare.pro"
-    payload = {
-        "api_name": "limit_list_d",
-        "token": TUSHARE_TOKEN,
-        "params": {
-            "trade_date": today,
-            "limit_type": "U"
-        }
-    }
+    
+    # 获取stock_basic用于ST判断
+    name_map = {}
     try:
-        resp = requests.post(url, json=payload, timeout=10)
+        payload_basic = {
+            "api_name": "stock_basic",
+            "token": TUSHARE_TOKEN,
+            "params": {"list_status": "L"},
+            "fields": "ts_code,name"
+        }
+        resp_basic = requests.post(url, json=payload_basic, timeout=10)
+        data_basic = resp_basic.json()
+        if data_basic.get("code") == 0 and data_basic.get("data"):
+            for r in data_basic["data"]["items"]:
+                name_map[r[0]] = r[1]
+    except Exception as e:
+        print(f"获取stock_basic失败: {e}")
+    
+    # 方案1：用daily接口筛选（实时数据，T日可用）
+    try:
+        payload = {
+            "api_name": "daily",
+            "token": TUSHARE_TOKEN,
+            "params": {"trade_date": today},
+            "fields": "ts_code,pct_chg"
+        }
+        resp = requests.post(url, json=payload, timeout=15)
         data = resp.json()
         if data.get("code") == 0 and data.get("data"):
             fields = data["data"]["fields"]
             records = data["data"]["items"]
             ts_code_idx = fields.index("ts_code")
-            return [r[ts_code_idx] for r in records if r[ts_code_idx]]
+            pct_chg_idx = fields.index("pct_chg")
+            
+            limit_codes = []
+            for r in records:
+                code = r[ts_code_idx]
+                pct = safe_float(r[pct_chg_idx])
+                if not code:
+                    continue
+                
+                # 过滤1: 排除创业板/科创板/北交所（与pipeline规则3一致）
+                if code.startswith('300') or code.startswith('688') or code.startswith('8') or code.startswith('4'):
+                    continue
+                
+                # 过滤2: 排除ST/*ST（与pipeline规则1一致）
+                name = name_map.get(code, '')
+                if 'ST' in name:
+                    continue
+                
+                # 主板非ST涨停阈值9.9%
+                if pct >= 9.9:
+                    limit_codes.append(code)
+            
+            if limit_codes:
+                print(f"daily接口获取主板涨停(非ST): {len(limit_codes)}只")
+                return limit_codes
     except Exception as e:
-        print(f"获取涨停列表失败: {e}")
+        print(f"daily接口获取涨停失败: {e}")
+    
+    # 方案2：降级用limit_list_d（T+1数据，当天可能为空），同样做过滤
+    try:
+        payload = {
+            "api_name": "limit_list_d",
+            "token": TUSHARE_TOKEN,
+            "params": {
+                "trade_date": today,
+                "limit_type": "U"
+            }
+        }
+        resp = requests.post(url, json=payload, timeout=10)
+        data = resp.json()
+        if data.get("code") == 0 and data.get("data"):
+            fields = data["data"]["fields"]
+            records = data["data"]["items"]
+            if records:
+                ts_code_idx = fields.index("ts_code")
+                result = []
+                for r in records:
+                    code = r[ts_code_idx]
+                    if not code:
+                        continue
+                    # 同样过滤创业板/科创板/北交所
+                    if code.startswith('300') or code.startswith('688') or code.startswith('8') or code.startswith('4'):
+                        continue
+                    # 同样过滤ST
+                    name = name_map.get(code, '')
+                    if 'ST' in name:
+                        continue
+                    result.append(code)
+                if result:
+                    print(f"limit_list_d获取主板涨停(非ST): {len(result)}只")
+                    return result
+    except Exception as e:
+        print(f"limit_list_d获取涨停失败: {e}")
+    
     return []
 
 # ===== 5. 计算命中 =====
@@ -196,13 +300,24 @@ def analyze_dimension_performance(analysis_results: list) -> dict:
 
 # ===== 7. 置信度分布 =====
 def confidence_distribution(analysis_results: list) -> dict:
-    """统计置信度分布"""
+    """
+    统计置信度分布。
+    当confidence字段不存在/None时，用total综合分代替：
+      - high: total >= 40（高分区间）
+      - medium: total >= 25（中等）
+      - low: total < 25（低分）
+    """
     dist = {"high": 0, "medium": 0, "low": 0}
     for r in analysis_results:
-        conf = r.get("confidence", 0)
-        if conf >= 70:
+        conf = r.get("confidence")
+        if conf is None or conf == '':
+            # 用total综合分替代
+            conf = r.get("total", 0) or 0
+        
+        conf = safe_float(conf)
+        if conf >= 40:
             dist["high"] += 1
-        elif conf >= 50:
+        elif conf >= 25:
             dist["medium"] += 1
         else:
             dist["low"] += 1
@@ -271,7 +386,7 @@ def send_feishu_report(report: dict):
             {"tag": "hr"},
             {
                 "tag": "div",
-                "text": {"tag": "lark_md", "content": f"**置信度分布**: 高(≥70): {report['confidence_dist']['high']} | 中(50-70): {report['confidence_dist']['medium']} | 低(<50): {report['confidence_dist']['low']}"}
+                "text": {"tag": "lark_md", "content": f"**置信度分布**: 高(≥40): {report['confidence_dist']['high']} | 中(25-40): {report['confidence_dist']['medium']} | 低(<25): {report['confidence_dist']['low']}"}
             }
         ]
     }
@@ -373,9 +488,9 @@ def generate_markdown_report(report: dict) -> str:
     lines.append("")
     lines.append("| 等级 | 阈值 | 数量 |")
     lines.append("|------|------|------|")
-    lines.append(f"| 高置信度 | ≥70% | {conf_dist.get('high', 0)} |")
-    lines.append(f"| 中置信度 | 50%~70% | {conf_dist.get('medium', 0)} |")
-    lines.append(f"| 低置信度 | <50% | {conf_dist.get('low', 0)} |")
+    lines.append(f"| 高置信度 | ≥40 | {conf_dist.get('high', 0)} |")
+    lines.append(f"| 中置信度 | 25~40 | {conf_dist.get('medium', 0)} |")
+    lines.append(f"| 低置信度 | <25 | {conf_dist.get('low', 0)} |")
     lines.append("")
     
     # 总结
@@ -414,22 +529,29 @@ def main():
     print(f"今日预测信号: {len(signals)}只")
     
     # Step 3: 汇总分析结果
-    analysis = load_today_analysis(today)
-    print(f"今日分析结果: {len(analysis)}条")
+    all_analysis, pushed_analysis = load_today_analysis(today)
+    print(f"今日全量分析结果: {len(all_analysis)}条, 推送池: {len(pushed_analysis)}条")
     
     # Step 4: 获取涨停列表
     limit_ups = get_today_limit_up(today)
     print(f"今日实际涨停: {len(limit_ups)}只")
     
-    # Step 5: 计算命中（以推送池为预测池，而非全部信号）
-    # 推送池 = 综合分>=50的候选股票
+    # Step 5: 计算命中（以推送池为预测池，若无推送池则用全量分析）
     pushed_codes = set()
-    for item in analysis:
+    # 优先用推送池(>=50分)作为预测池
+    for item in pushed_analysis:
         code = item.get("code", "")
         if code:
             pushed_codes.add(code)
     
-    # 如果没有分析结果（无推送池），fallback到信号文件
+    # 如果推送池为空，用全量分析作为预测池
+    if not pushed_codes:
+        for item in all_analysis:
+            code = item.get("code", "")
+            if code:
+                pushed_codes.add(code)
+    
+    # 如果全量分析也空，fallback到信号文件
     if not pushed_codes:
         for p in signals:
             code = p.get("ts_code") or p.get("code") or p.get("代码", "")
@@ -453,17 +575,17 @@ def main():
     }
     print(f"命中情况: {hits['hit_count']}/{hits['predicted_count']} ({hits['hit_rate']:.1f}%)")
     
-    # 标记分析结果中的命中（仅推送池内标记）
+    # 标记全量分析结果中的命中
     hit_codes = set(hits["hit_codes"])
-    for r in analysis:
+    for r in all_analysis:
         code = r.get("code", "") or r.get("ts_code", "")
         r["hit"] = code in hit_codes
     
-    # Step 6: 各维度表现（仅基于推送池）
-    dim_perf = analyze_dimension_performance(analysis)
+    # Step 6: 各维度表现（基于全量分析，而非仅推送池）
+    dim_perf = analyze_dimension_performance(all_analysis)
     
-    # Step 7: 置信度分布（仅基于推送池）
-    conf_dist = confidence_distribution(analysis)
+    # Step 7: 置信度分布（基于全量分析，而非仅推送池）
+    conf_dist = confidence_distribution(all_analysis)
     
     # Step 8: 生成报告
     report = {

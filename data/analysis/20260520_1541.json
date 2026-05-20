@@ -1,0 +1,142 @@
+[
+  {
+    "code": "603439.SH",
+    "name": "三力制药",
+    "scores": {
+      "fundamental": 53.5,
+      "technical": 44,
+      "fundflow": 4,
+      "sentiment": 10
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=3.1%偏低; 4个概念; 股东户数-5.8%",
+      "technical": "[低] 均线多头+15; 回踩MA10企稳+10; 下影线支撑+4; 低位密集(集中度7.9%)+10; 获利盘83.1%锁定+5",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]7.9%-5; [盘口0分] 净流出0.15亿; [融资4分] 持股占比+0.17%+4",
+      "sentiment": "[无] 4概念+5; 题材中医药+5"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 27.875,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "003036.SZ",
+    "name": "泰坦股份",
+    "scores": {
+      "fundamental": 50.0,
+      "technical": 43,
+      "fundflow": 0,
+      "sentiment": 8
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=3.2%偏低; 扣非净利+30%; 股东户数+57.9%",
+      "technical": "[低] 换手=5.6%+10; 均线多头+15; 回踩MA10企稳+10; 假突破:3日中3日长上影-4; 下影线支撑+4",
+      "fundflow": "否决: 纯散户博弈[实时]:主力净占比-8.0%<5%; 大额流出[实时]:净占比-8.0%",
+      "sentiment": "[无] 20日涨停2次+3; 竞价跳空-1.2%[震荡态×1.0]→0分; 竞价关注度高(量比2.6)+3; 竞价成交1292万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 25.25,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "605288.SH",
+    "name": "凯迪股份",
+    "scores": {
+      "fundamental": 52.5,
+      "technical": 23,
+      "fundflow": 4,
+      "sentiment": 17
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=2.7%偏低; 扣非净利-162%; 5个概念; 股东户数-6.2%",
+      "technical": "[无] 均线多头+15; MA60下倾-5; 回踩MA10企稳+10; 筹码发散(集中度28.2%)-5; 获利盘73.7%锁定+5",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15; [盘口0分] 净流出0.01亿; [融资4分] 北向持股41.78万股+4",
+      "sentiment": "[无] 5概念+5; 20日涨停+1; 竞价跳空2.0%[震荡态×1.0]→1分; 竞价关注度极高(量比3.9)+5; 竞价量比5.2+3"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 24.125,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603311.SH",
+    "name": "金海高科",
+    "scores": {
+      "fundamental": 47.0,
+      "technical": 33,
+      "fundflow": 0,
+      "sentiment": 16
+    },
+    "reasons": {
+      "fundamental": "[低] 扣非净利-28%; 4个概念",
+      "technical": "[无] 均线多头+15; 回踩MA10企稳+10; 筹码发散(集中度25.5%)-5; 获利盘99.2%锁定+5; 收盘/BOLL中轨1.386>1.01+3[VWAP代理]",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-2.8%<5%",
+      "sentiment": "[无] 4概念+5; 换手16.2%情绪活跃+2; 20日涨停5次+3; 竞价跳空-4.2%[震荡态×1.0]→0分; 竞价关注度高(量比2.6)+3; 竞价量比3.3+1"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 24.0,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002989.SZ",
+    "name": "中天精装",
+    "scores": {
+      "fundamental": 41.5,
+      "technical": 40,
+      "fundflow": 0,
+      "sentiment": 5
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=-11.4%偏低; 扣非净利-51%; 3个概念",
+      "technical": "[低] 换手=7.1%+10; 均线多头+15; 回踩MA10企稳+10; 获利盘77.0%锁定+5; 收盘/BOLL中轨1.158>1.01+3[VWAP代理]",
+      "fundflow": "否决: 纯散户博弈[实时]:主力净占比-22.2%<5%; 大额流出[实时]:净占比-22.2%",
+      "sentiment": "[无] 20日涨停3次+3; 竞价关注度较高(量比0.7)+1; 竞价成交332万+1"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 21.625,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  }
+]
