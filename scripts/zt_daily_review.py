@@ -418,6 +418,11 @@ def send_feishu_report(report: dict):
             {"tag": "hr"},
             {
                 "tag": "div",
+                "text": {"tag": "lark_md", "content": "**命中涨停**\n" + "\n".join(f"{d['code']} {d['name']}" for d in report.get('hit_details', [])) if report.get('hit_details') else "**命中涨停**\n无"}
+            },
+            {"tag": "hr"},
+            {
+                "tag": "div",
                 "text": {"tag": "lark_md", "content": "**各维度平均分(命中/未命中)**"}
             },
             {
@@ -469,6 +474,7 @@ def generate_markdown_report(report: dict) -> str:
     rate = report['hit_rate']
     hit_codes = report.get('hit_codes', [])
     miss_codes = report.get('miss_codes', [])
+    hit_details = report.get('hit_details', [])
     dim_perf = report.get('dim_performance', {})
     conf_dist = report.get('confidence_dist', {})
 
@@ -507,7 +513,18 @@ def generate_markdown_report(report: dict) -> str:
         if len(miss_codes) > 30:
             lines.append(f"- ... 等共 {len(miss_codes)} 只")
         lines.append("")
-    
+
+    # 命中涨停详情
+    hit_details = report.get('hit_details', [])
+    if hit_details:
+        lines.append("## 🏆 命中涨停股票")
+        lines.append("")
+        lines.append("| 代码 | 名称 |")
+        lines.append("|------|------|")
+        for d in hit_details:
+            lines.append(f"| {d['code']} | {d['name']} |")
+        lines.append("")
+
     # 各维度表现
     lines.append("## 📊 各维度评分表现")
     lines.append("")
@@ -614,7 +631,8 @@ def main():
         "hit_count": len(hits_set),
         "hit_rate": len(hits_set) / len(pushed_codes) * 100 if pushed_codes else 0,
         "hit_codes": list(hits_set),
-        "miss_codes": list(pushed_codes - actual_codes)
+        "miss_codes": list(pushed_codes - actual_codes),
+        "hit_details": [{"code": code, "name": next((r.get("name","") for r in pushed_analysis if r.get("code")==code), "")} for code in hits_set]
     }
     print(f"命中情况: 推送{hits['pushed_count']}只中命中{hits['hit_count']}只 ({hits['hit_rate']:.1f}%)")
     
@@ -639,6 +657,7 @@ def main():
         "hit_rate": hits["hit_rate"],
         "hit_codes": hits["hit_codes"],
         "miss_codes": hits.get("miss_codes", []),
+        "hit_details": hits.get("hit_details", []),
         "dim_performance": dim_perf,
         "confidence_dist": conf_dist
     }

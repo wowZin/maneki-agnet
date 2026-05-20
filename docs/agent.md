@@ -53,6 +53,7 @@
 |------|----------|------|
 | 扫描数据 | data/signals/{date}_{time}.json | data/signals/20260518_093000.json |
 | 分析结果 | data/analysis/{date}_{time}.json | data/analysis/20260518_093500.json |
+| 推送记录 | data/pushed/{date}_{time}.json | data/pushed/20260518_093500.json |
 | 复盘报告(JSON) | data/reports/{date}.json | data/reports/20260518.json |
 | 复盘报告(Markdown) | data/reports/{date}.md | data/reports/20260518.md |
 
@@ -69,11 +70,12 @@
 
 **关键行为约束（LLM必须遵守）**：
 - 推送决策：综合分>=50的股票全部推送；无>=50分时推送前5只（降级兜底）
-- 复盘预测池：以**今日实际推送给用户的数据**为预测集合，而非全部扫描信号。推送记录保存在 `data/pushed/`
+- 复盘预测池：以**今日实际推送给用户的数据**为预测集合，而非全部扫描信号。推送记录保存在 `data/pushed/`。若无推送记录，从各时段分析结果按推送规则重建（每时段独立应用推送规则，跨时段累加去重）
 - 命中率：命中率 = 推送数据中涨停数 / 推送数据总数
 - 涨停数据源：必须使用 Tushare `limit_list_d` 接口获取实际涨停（`limit_list` 数据不全，禁止用于复盘）
 - 报告格式：复盘同时生成 JSON（程序读取）和 Markdown（人类可读）两份报告，存放于 `data/reports/YYYYMMDD.{json,md}`
-- 报告字段：推送信号数、大盘涨停数、命中涨停数、命中率
+- 报告字段：推送信号数、大盘涨停数、命中涨停数、命中率、命中涨停股票详情（代码+名称）
+- 飞书测试模式：`.env` 中 `FEISHU_TEST_MODE=true` 时卡片标题加"测试-"前缀
 
 详情设计参考: [Team Leader 设计](./agent-leader.md)
 
