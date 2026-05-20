@@ -887,7 +887,7 @@ def score_technical(code):
                 vol_reasons.append(f"洗盘起爆+10")
     
     # 温和放量：当日成交量 > 近3日均量1.3倍 且 < 近20日均量2.5倍
-    if len(factors) >= 20:
+    if len(factors) >= 21:
         today_vol = safe_float(today.get('vol'))
         vol_3d = sum(safe_float(factors[i].get('vol', 0)) for i in range(1, 4)) / 3
         vol_20d = sum(safe_float(factors[i].get('vol', 0)) for i in range(1, 21)) / 20
@@ -895,7 +895,7 @@ def score_technical(code):
             if today_vol > vol_3d * 1.3 and today_vol < vol_20d * 2.5:
                 vol_score += 15
                 vol_reasons.append(f"温和放量(vol/3d={today_vol/vol_3d:.1f})+15")
-    elif len(factors) >= 3:
+    elif len(factors) >= 4:
         # 数据不足20日，用3日均量判断
         today_vol = safe_float(today.get('vol'))
         vol_3d = sum(safe_float(factors[i].get('vol', 0)) for i in range(1, 4)) / 3

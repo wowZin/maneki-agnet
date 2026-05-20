@@ -27,6 +27,11 @@ def _build_tushare_response(items, fields=None):
 class TestSentimentScoreV1(unittest.TestCase):
     """情绪面五维度评分测试"""
 
+    def setUp(self):
+        """每个测试前清空Tushare缓存，避免缓存污染"""
+        from scripts.zt_pipeline import clear_tushare_cache
+        clear_tushare_cache()
+
     def _mock_requests_post(self, responses_map):
         """
         创建mock，根据api_name返回不同响应
@@ -134,20 +139,21 @@ class TestSentimentScoreV1(unittest.TestCase):
 
     @patch('requests.post')
     def test_veto_theme_collapse(self, mock_post):
-        """一票否决：主线崩塌（概念涨停数<2）"""
+        """一票否决：主线崩塌（概念涨停=0）+ 纯跟风（=1）"""
         from scripts.zt_pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
         cpt_fields = ["ts_code", "name", "trade_date", "days", "up_stat", "cons_nums", "up_nums", "pct_chg", "rank"]
 
-        responses = {
+        # 场景1: 概念涨停=0 → 主线崩塌
+        responses_0 = {
             "concept_detail": _build_tushare_response(
                 self._build_concept_items(["机器人", "AI"]),
                 ["id", "concept_name"]
             ),
             "limit_list_d": _build_tushare_response(
-                self._build_limit_items(25, 2),  # 涨停数正常
+                self._build_limit_items(25, 2),
                 limit_fields
             ),
             "limit_step": _build_tushare_response(
@@ -157,15 +163,42 @@ class TestSentimentScoreV1(unittest.TestCase):
             "top_list": _build_tushare_response([], []),
             "top_inst": _build_tushare_response([], []),
             "limit_cpt_list": _build_tushare_response(
-                self._build_cpt_items([("机器人", 1), ("AI", 0)]),  # 概念涨停仅1只
+                self._build_cpt_items([("机器人", 0), ("AI", 0)]),  # 全部概念0涨停→主线崩塌
                 cpt_fields
             ),
         }
-        mock_post.side_effect = self._mock_requests_post(responses)
-
+        mock_post.side_effect = self._mock_requests_post(responses_0)
         score, reason = score_sentiment("600000.SH")
         self.assertEqual(score, 0)
         self.assertIn("主线崩塌", reason)
+
+        # 场景2: 概念涨停=1 → 纯跟风（非主线崩塌）
+        from scripts.zt_pipeline import clear_tushare_cache
+        clear_tushare_cache()
+        responses_1 = {
+            "concept_detail": _build_tushare_response(
+                self._build_concept_items(["机器人", "AI"]),
+                ["id", "concept_name"]
+            ),
+            "limit_list_d": _build_tushare_response(
+                self._build_limit_items(25, 2),
+                limit_fields
+            ),
+            "limit_step": _build_tushare_response(
+                self._build_step_items([3, 2]),
+                step_fields
+            ),
+            "top_list": _build_tushare_response([], []),
+            "top_inst": _build_tushare_response([], []),
+            "limit_cpt_list": _build_tushare_response(
+                self._build_cpt_items([("机器人", 1), ("AI", 0)]),  # 概念涨停仅1只→纯跟风
+                cpt_fields
+            ),
+        }
+        mock_post.side_effect = self._mock_requests_post(responses_1)
+        score, reason = score_sentiment("600000.SH")
+        self.assertEqual(score, 0)
+        self.assertIn("纯跟风", reason)
 
     @patch('requests.post')
     def test_veto_hot_money_exit(self, mock_post):

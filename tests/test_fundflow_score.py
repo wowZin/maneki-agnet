@@ -27,6 +27,11 @@ def _build_tushare_response(items, fields=None):
 class TestFundflowScoreV1(unittest.TestCase):
     """资金面五维度评分测试"""
 
+    def setUp(self):
+        """每个测试前清空Tushare缓存，避免缓存污染"""
+        from scripts.zt_pipeline import clear_tushare_cache
+        clear_tushare_cache()
+
     def _mock_requests_post(self, responses_map):
         """
         创建mock，根据api_name返回不同响应

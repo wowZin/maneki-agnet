@@ -18,6 +18,11 @@ os.environ.setdefault('TUSHARE_TOKEN', 'test_token_for_unit_test')
 class TestTechnicalScoreV1(unittest.TestCase):
     """技术面五维度评分测试"""
 
+    def setUp(self):
+        """每个测试前清空Tushare缓存，避免缓存污染"""
+        from scripts.zt_pipeline import clear_tushare_cache
+        clear_tushare_cache()
+
     def _build_factor_response(self, items, fields=None):
         """构建Tushare stk_factor_pro 响应"""
         if fields is None:
@@ -242,7 +247,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
         score, reason = score_technical("000001.SZ")
 
         self.assertEqual(score, 50)
-        self.assertIn("获取失败", reason)
+        self.assertIn("不足", reason)
 
     @patch('requests.post')
     def test_empty_data(self, mock_post):
