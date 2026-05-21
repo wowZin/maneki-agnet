@@ -1,0 +1,142 @@
+[
+  {
+    "code": "600783.SH",
+    "name": "鲁信创投",
+    "scores": {
+      "fundamental": 65.5,
+      "technical": 42,
+      "fundflow": 48,
+      "sentiment": 12
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=3.1%偏低; 扣非净利+63%; 14个概念; 股东户数-6.0%",
+      "technical": "[低] 换手=6.5%+10; MA60下倾-5; 回踩MA10企稳+10; 下影线支撑+4; 低位密集(集中度9.6%)+10",
+      "fundflow": "[低] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]5.5%-5; [龙虎25分] [盘中]封单2529.9%流通市值+10 [盘中]早封板10:06:21+8 [盘中]秒封/一字板+7; [盘口16分] 净流入1.73亿+10 换手6.5%+6; [融资4分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2; [锁仓3分] 流入加速+3",
+      "sentiment": "[无] 14概念+8; 20日涨停+1; 竞价关注度较高(量比0.7)+1; 竞价成交825万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 41.875,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002056.SZ",
+    "name": "横店东磁",
+    "scores": {
+      "fundamental": 60.8,
+      "technical": 33,
+      "fundflow": 38,
+      "sentiment": 22
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=17.9%; 扣非净利-31%; 24个概念; 股东户数+12.1%; 负债率61%",
+      "technical": "[无] 温和放量(vol/3d=1.5)+15; MA60下倾-5; 回踩MA10企稳+10; 获利盘75.2%锁定+5; 收盘/BOLL中轨1.029>1.01+3[VWAP代理]",
+      "fundflow": "[低] [主力10分] 主力净流入[实时]13.88%+15 主力占比偏弱[实时]14.0%-5; [龙虎11分] [盘中]封单1651.3%流通市值+10 [盘中]早封板09:59:03+8 [盘中]开板8次-7; [盘口10分] 净流入0.68亿+10; [融资4分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2; [锁仓3分] 流入加速+3",
+      "sentiment": "[无] 24概念+8; 热门题材+10; 竞价跳空1.1%[震荡态×1.0]→1分; 竞价关注度较高(量比0.9)+1; 竞价成交777万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 38.45,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002371.SZ",
+    "name": "北方华创",
+    "scores": {
+      "fundamental": 85.0,
+      "technical": 30,
+      "fundflow": 0,
+      "sentiment": 21
+    },
+    "reasons": {
+      "fundamental": "[高] ROE=16.1%; 23个概念; 股东户数-7.0%; 业绩+筹码共振",
+      "technical": "[无] 均线多头+15; 回踩MA10企稳+10; 获利盘98.9%锁定+5; 收盘/BOLL中轨1.211>1.01+3[VWAP代理]; 主力净流出6.2%-8",
+      "fundflow": "否决: 纯散户博弈[实时]:主力净占比-6.5%<5%; 大额流出[实时]:净占比-6.4%",
+      "sentiment": "[无] 23概念+8; 热门题材+10; 竞价关注度较高(量比0.7)+1; 竞价成交7603万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 34.0,
+    "resonance": {
+      "count": 1,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "605376.SH",
+    "name": "博迁新材",
+    "scores": {
+      "fundamental": 71.5,
+      "technical": 45,
+      "fundflow": 0,
+      "sentiment": 12
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=4.1%偏低; 扣非净利+64%; 营收+64%; 5个概念",
+      "technical": "[低] 换手=6.8%+10; 回踩MA10企稳+10; 下影线支撑+4; 低位密集(集中度11.9%)+10; 获利盘91.7%锁定+5",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比3.2%<5%",
+      "sentiment": "[无] 5概念+5; 20日涨停2次+3; 竞价跳空1.9%[震荡态×1.0]→1分; 竞价关注度较高(量比0.5)+1; 竞价成交1336万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 32.125,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "001211.SZ",
+    "name": "双枪科技",
+    "scores": {
+      "fundamental": 31.5,
+      "technical": 47,
+      "fundflow": 40,
+      "sentiment": 8
+    },
+    "reasons": {
+      "fundamental": "[无] ROE=0.3%偏低; 扣非净利-33%; 股东户数+7.4%; 流动性风险",
+      "technical": "[低] 换手=10.0%+10; 均线多头+15; 回踩MA10企稳+10; 下影线支撑+4; 获利盘65.9%锁定+5",
+      "fundflow": "[低] [主力15分] 主力净流入[实时]15.58%+15; [龙虎25分] [盘中]封单10014.3%流通市值+10 [盘中]早封板10:01:33+8 [盘中]秒封/一字板+7; [盘口0分] 净流出0.00亿; [融资0分] [盘中]无融资数据",
+      "sentiment": "[无] 20日涨停3次+3; 竞价跳空-5.3%[震荡态×1.0]→0分; 竞价关注度高(量比2.9)+3; 竞价成交1075万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 31.625,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  }
+]
