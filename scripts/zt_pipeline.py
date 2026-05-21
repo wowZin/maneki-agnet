@@ -47,7 +47,8 @@ AGENT_WEIGHTS = {
     "fundamental": float(CONFIG.get("AGENT_WEIGHT_FUNDAMENTAL", "1")),
     "technical": float(CONFIG.get("AGENT_WEIGHT_TECHNICAL", "1")),
     "fundflow": float(CONFIG.get("AGENT_WEIGHT_FUND_FLOW", "1")),
-    "sentiment": float(CONFIG.get("AGENT_WEIGHT_SENTIMENT", "1"))
+    "sentiment": float(CONFIG.get("AGENT_WEIGHT_SENTIMENT", "1")),
+    "shortterm": float(CONFIG.get("AGENT_WEIGHT_SHORTTERM", "1")),
 }
 
 # ===== Tushare API 缓存层 =====
@@ -2614,20 +2615,22 @@ def main():
         print("过滤后无候选股，退出")
         return
     
-    # 2-5. 四维度评分
+    # 2-5. 四维度评分 + 短线博弈
     results = []
     for stock in candidates:
         code = stock["code"]
         name = stock["name"]
         print(f"\n[分析] {code} {name}")
         
-        print("  四维度并行评分...", flush=True)
+        print("  五维度并行评分...", flush=True)
         from concurrent.futures import ThreadPoolExecutor, as_completed
+        from score_shortterm import score_shortterm
         scoring_funcs = {
             "fundamental": score_fundamental,
             "technical": score_technical,
             "fundflow": score_fundflow,
             "sentiment": score_sentiment,
+            "shortterm": score_shortterm,
         }
         scores = {}
         reasons = {}
@@ -2649,26 +2652,30 @@ def main():
         t_score = scores.get("technical", 0)
         m_score = scores.get("fundflow", 0)
         s_score = scores.get("sentiment", 0)
+        st_score = scores.get("shortterm", 0)
         f_reason = reasons.get("fundamental", "")
         t_reason = reasons.get("technical", "")
         m_reason = reasons.get("fundflow", "")
         s_reason = reasons.get("sentiment", "")
+        st_reason = reasons.get("shortterm", "")
         
         # 加权综合评分
         weights = AGENT_WEIGHTS
+        total_w = sum(weights.values())
         total = (f_score * weights["fundamental"] + 
                  t_score * weights["technical"] + 
                  m_score * weights["fundflow"] + 
-                 s_score * weights["sentiment"]) / sum(weights.values())
+                 s_score * weights["sentiment"] +
+                 st_score * weights["shortterm"]) / total_w if total_w > 0 else 0
         
-        # 多维度共振判定（≥3个维度得分≥权重70%）
-        # 维度满分映射：基本面100→70, 技术面100→70, 资金面100→70, 情绪面100→70
-        resonance_threshold = 75  # 全系统统一评级阈值：75/55/35
+        # 多维度共振判定（≥3个维度得分≥75）
+        resonance_threshold = 75
         resonance_count = sum([
             f_score >= resonance_threshold,
             t_score >= resonance_threshold,
             m_score >= resonance_threshold,
-            s_score >= resonance_threshold
+            s_score >= resonance_threshold,
+            st_score >= resonance_threshold,
         ])
         resonance_flag = resonance_count >= 3
         
@@ -2682,13 +2689,15 @@ def main():
                 "fundamental": f_score,
                 "technical": t_score,
                 "fundflow": m_score,
-                "sentiment": s_score
+                "sentiment": s_score,
+                "shortterm": st_score,
             },
             "reasons": {
                 "fundamental": f_reason,
                 "technical": t_reason,
                 "fundflow": m_reason,
-                "sentiment": s_reason
+                "sentiment": s_reason,
+                "shortterm": st_reason,
             },
             "weights": weight_info,
             "total": total,
