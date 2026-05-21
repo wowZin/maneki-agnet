@@ -159,32 +159,52 @@ def _get_realtime_quote(code: str) -> dict:
             markets = [("m:0+t:6", "SZ主板"), ("m:0+t:80", "SZ创业板")]
             base = 0
 
-        # 获取代理session（首次调用会获取代理IP）
+        # 获取代理session
         sess = get_requests_session_with_proxy()
         if sess is None:
             sess = _req.Session()
-            sess.headers.update({"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"})
+            sess.headers.update({"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                                 "Referer": "https://quote.eastmoney.com/"})
+        # 确保 session 有代理配置
+        if not sess.proxies:
+            from proxy_utils import get_proxies_dict
+            proxies = get_proxies_dict()
+            if proxies:
+                sess.proxies = proxies
 
         for fs, label in markets:
-            est_page = max(1, (raw_num - base) // 100)
-            for offset in range(0, 4):
-                for pn in (est_page + offset, est_page - offset):
-                    if pn < 1:
-                        continue
-                    url = (
-                        f"https://push2.eastmoney.com/api/qt/clist/get?"
-                        f"np=1&fltt=2&invt=2&fs={fs}&fields=f2,f3,f12,f14&pn={pn}&pz=100"
-                    )
-                    resp = sess.get(url, timeout=5)
-                    data = resp.json()
-                    items = data.get("data", {}).get("diff", [])
-                    for item in items:
-                        if item.get("f12") == raw:
-                            return {
-                                "price": item.get("f2", 0) or 0,
-                                "change_pct": item.get("f3", 0) or 0,
-                            }
-                    if len(items) < 100:
+            # 先拿总页数
+            try:
+                resp = sess.get(
+                    f"https://push2.eastmoney.com/api/qt/clist/get?"
+                    f"np=1&fltt=2&invt=2&fs={fs}&fields=f12&pn=1&pz=1&po=0",
+                    timeout=5
+                )
+                total_count = resp.json().get("data", {}).get("total", 0)
+                total_pages = (total_count // 100) + 1
+            except Exception:
+                total_pages = 20  # fallback
+
+            for pn in range(1, total_pages + 1):
+                url = (
+                    f"https://push2.eastmoney.com/api/qt/clist/get?"
+                    f"np=1&fltt=2&invt=2&fs={fs}&fields=f2,f3,f12,f14&pn={pn}&pz=100&po=0"
+                )
+                for retry in range(2):
+                    try:
+                        resp = sess.get(url, timeout=8)
+                        items = resp.json().get("data", {}).get("diff", [])
+                        for item in items:
+                            if item.get("f12") == raw:
+                                return {"price": item.get("f2", 0) or 0, "change_pct": item.get("f3", 0) or 0}
+                        break
+                    except Exception:
+                        if retry == 0:
+                            from proxy_utils import get_proxy_ip
+                            new_addr = get_proxy_ip(force_refresh=True)
+                            if new_addr:
+                                sess.proxies = {"http": f"http://{new_addr}", "https": f"http://{new_addr}"}
+                            continue
                         break
         return {"price": 0, "change_pct": 0}
     except Exception as e:
@@ -332,12 +352,13 @@ def _build_result_card(stock_name: str, result: dict, quote: dict | None = None)
     change_pct = (quote or {}).get("change_pct", 0)
     price = (quote or {}).get("price", 0)
 
-    # 标题行：综合评分 + 实时涨跌幅
-    change_str = f"涨跌幅: {change_pct:+.2f}%" if change_pct else ""
-    price_str = f"现价: {price:.2f}" if price else ""
-    header_line = f"**综合评分: {total:.1f}**"
-    if change_pct:
-        header_line += f"　{change_str}　{price_str}"
+    # 标题行：综合评分 + 实时涨跌幅（分行展示）
+    header_lines = [f"**综合评分: {total:.1f}**"]
+    if change_pct is not None and change_pct != "":
+        header_lines.append(f"**涨跌幅: {change_pct:+.2f}%**")
+    if price is not None and price != "":
+        header_lines.append(f"**现价: {price:.2f}**")
+    header_content = "\n".join(header_lines)
 
     # 各维度详情
     score_lines = []
@@ -348,7 +369,7 @@ def _build_result_card(stock_name: str, result: dict, quote: dict | None = None)
         score_lines.append(f"**{_dim_label(dim)} {s:.0f}分**　{short_reason}")
 
     elements = [
-        {"tag": "div", "text": {"tag": "lark_md", "content": header_line}},
+        {"tag": "div", "text": {"tag": "lark_md", "content": header_content}},
         {"tag": "hr"},
         {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(score_lines)}},
     ]
@@ -437,7 +458,7 @@ async def handle_message_event(event: dict):
                 if summary:
                     await FEISHU_CLIENT.send_text(
                         chat_id,
-                        f"💡 {stock_name}({code}) {summary}"
+                        f"💡 {stock_name}({code}) 总结: {summary}"
                     )
             except Exception as e:
                 card = _build_error_card(code, str(e))
