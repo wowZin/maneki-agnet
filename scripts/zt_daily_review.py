@@ -181,7 +181,79 @@ def load_today_analysis(today: str) -> tuple:
     print(f"全量分析: {len(all_items)}只, 推送数据: {len(pushed)}只")
     return all_items, pushed
 
-# ===== 4. 获取当日涨停股票 =====
+# ===== 4. 获取当日日线收盘数据 =====
+def get_daily_close_data(today: str) -> dict:
+    """
+    获取当日全部股票的收盘价和涨跌幅。
+    返回 {ts_code: {"close": float, "pct_chg": float}}
+    """
+    url = "http://api.tushare.pro"
+    payload = {
+        "api_name": "daily",
+        "token": TUSHARE_TOKEN,
+        "params": {"trade_date": today},
+        "fields": "ts_code,close,pct_chg"
+    }
+    try:
+        resp = requests.post(url, json=payload, timeout=15)
+        data = resp.json()
+        if data.get("code") == 0 and data.get("data"):
+            fields = data["data"]["fields"]
+            records = data["data"]["items"]
+            ts_code_idx = fields.index("ts_code")
+            close_idx = fields.index("close")
+            pct_idx = fields.index("pct_chg")
+            result = {}
+            for r in records:
+                code = r[ts_code_idx]
+                result[code] = {
+                    "close": safe_float(r[close_idx]),
+                    "pct_chg": safe_float(r[pct_idx])
+                }
+            return result
+    except Exception as e:
+        print(f"获取日线数据失败: {e}")
+    return {}
+
+def build_signal_pct_map(signals: list) -> dict:
+    """
+    从信号数据构建股票代码→扫描时涨幅%的映射（去重，取首次出现）。
+    返回 {ts_code: scan_pct}
+    """
+    pct_map = {}
+    for s in signals:
+        code = s.get("代码") or s.get("code") or s.get("ts_code", "")
+        if not code:
+            continue
+        code_str = str(code).zfill(6) if "." not in str(code) else str(code).split(".")[0]
+        if code_str.startswith("6"):
+            ts_code = f"{code_str}.SH"
+        else:
+            ts_code = f"{code_str}.SZ"
+        if ts_code not in pct_map:
+            pct_map[ts_code] = safe_float(s.get("涨幅%", 0))
+    return pct_map
+
+def calculate_win_rate(pushed_analysis: list, signal_pct_map: dict, daily_close_data: dict) -> dict:
+    """
+    计算胜率：推送股票中，收盘涨幅 > 扫描时涨幅（即推送后继续上涨）的比例。
+    只统计推送过的股票，去重。
+    """
+    win_count = 0
+    total = 0
+    for item in pushed_analysis:
+        code = item.get("code", "")
+        scan_pct = signal_pct_map.get(code)
+        close_info = daily_close_data.get(code)
+        if scan_pct is not None and close_info:
+            close_pct = close_info.get("pct_chg", 0)
+            if close_pct > scan_pct:
+                win_count += 1
+            total += 1
+    win_rate = win_count / total * 100 if total > 0 else 0
+    return {"win_count": win_count, "total": total, "win_rate": win_rate}
+
+# ===== 5. 获取当日涨停股票 =====
 def get_today_limit_up(today: str) -> list:
     """
     获取当日涨停股票列表，过滤条件与pipeline一致：
@@ -415,6 +487,10 @@ def send_feishu_report(report: dict):
                 "tag": "div",
                 "text": {"tag": "lark_md", "content": f"**命中率**\n{report['hit_rate']:.1f}%"}
             },
+            {
+                "tag": "div",
+                "text": {"tag": "lark_md", "content": f"**胜率**\n{report.get('win_rate', 0):.1f}% ({report.get('win_count', 0)}/{report.get('win_total', 0)})"}
+            },
             {"tag": "hr"},
             {
                 "tag": "div",
@@ -489,6 +565,7 @@ def generate_markdown_report(report: dict) -> str:
     lines.append(f"| 大盘涨停 | **{cumulative}** 只 |")
     lines.append(f"| 命中涨停 | **{hit}** 只 |")
     lines.append(f"| 命中率 | **{rate:.1f}%** |")
+    lines.append(f"| 胜率 | **{report.get('win_rate', 0):.1f}%** ({report.get('win_count', 0)}/{report.get('win_total', 0)}) |")
     lines.append("")
     
     # 命中详情
@@ -528,7 +605,7 @@ def generate_markdown_report(report: dict) -> str:
     # 各维度表现
     lines.append("## 📊 各维度评分表现")
     lines.append("")
-    lines.append("基于今日被深度分析的股票，统计各维度在命中/未命中上的平均分：")
+    lines.append("基于今日推送股票，统计各维度在命中/未命中上的平均分：")
     lines.append("")
     lines.append("| 维度 | 分析次数 | 命中均分 | 未命中均分 | 差异 |")
     lines.append("|------|----------|----------|------------|------|")
@@ -572,7 +649,7 @@ def generate_markdown_report(report: dict) -> str:
         lines.append(f"今日命中率 **{rate:.1f}%**，表现一般。仅命中 {hit} 只涨停股，建议关注各维度评分阈值。")
     else:
         lines.append(f"今日命中率 **0%**，未命中任何涨停股。推送 {pushed} 只，大盘涨停 {cumulative} 只。")
-        if actual == 0:
+        if cumulative == 0:
             lines.append("注：当日大盘涨停数为0，可能为市场整体低迷或数据获取异常。")
     lines.append("")
     
@@ -600,9 +677,14 @@ def main():
     all_analysis, pushed_analysis = load_today_analysis(today)
     print(f"今日全量分析结果: {len(all_analysis)}条, 推送数据: {len(pushed_analysis)}条")
     
-    # Step 4: 获取涨停列表
+    # Step 4: 获取涨停列表 & 日线收盘数据
     limit_ups = get_today_limit_up(today)
     print(f"今日大盘涨停: {len(limit_ups)}只")
+
+    daily_close_data = get_daily_close_data(today)
+
+    # 构建信号涨幅映射（用于胜率计算）
+    signal_pct_map = build_signal_pct_map(signals)
     
     # Step 5: 计算命中（以推送数据为预测池）
     pushed_codes = set()
@@ -636,25 +718,32 @@ def main():
     }
     print(f"命中情况: 推送{hits['pushed_count']}只中命中{hits['hit_count']}只 ({hits['hit_rate']:.1f}%)")
     
-    # 标记全量分析结果中的命中
+    # 标记推送分析结果中的命中
     hit_codes = set(hits["hit_codes"])
-    for r in all_analysis:
+    for r in pushed_analysis:
         code = r.get("code", "") or r.get("ts_code", "")
         r["hit"] = code in hit_codes
+
+    # Step 6: 计算胜率（基于推送股票）
+    win_rate_info = calculate_win_rate(pushed_analysis, signal_pct_map, daily_close_data)
+    print(f"胜率: {win_rate_info['win_count']}/{win_rate_info['total']} = {win_rate_info['win_rate']:.1f}%")
+
+    # Step 7: 各维度表现（基于推送股票，而非全量分析）
+    dim_perf = analyze_dimension_performance(pushed_analysis)
+
+    # Step 8: 置信度分布（基于推送股票，而非全量分析）
+    conf_dist = confidence_distribution(pushed_analysis)
     
-    # Step 6: 各维度表现（基于全量分析，而非仅推送池）
-    dim_perf = analyze_dimension_performance(all_analysis)
-    
-    # Step 7: 置信度分布（基于全量分析，而非仅推送池）
-    conf_dist = confidence_distribution(all_analysis)
-    
-    # Step 8: 生成报告
+    # Step 9: 生成报告
     report = {
         "date": today,
         "pushed_count": hits["pushed_count"],
         "cumulative_limit_count": hits["cumulative_limit_count"],
         "hit_count": hits["hit_count"],
         "hit_rate": hits["hit_rate"],
+        "win_rate": win_rate_info["win_rate"],
+        "win_count": win_rate_info["win_count"],
+        "win_total": win_rate_info["total"],
         "hit_codes": hits["hit_codes"],
         "miss_codes": hits.get("miss_codes", []),
         "hit_details": hits.get("hit_details", []),
@@ -676,7 +765,7 @@ def main():
         f.write(md_content)
     print(f"Markdown报告已保存: {report_file_md}")
     
-    # Step 9: 飞书推送
+    # Step 10: 飞书推送
     if FEISHU_APP_ID and FEISHU_APP_SECRET and FEISHU_CHAT_ID_REPORT:
         send_feishu_report(report)
     else:

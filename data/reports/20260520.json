@@ -1,51 +1,54 @@
 {
   "date": "20260520",
   "pushed_count": 22,
-  "cumulative_limit_count": 68,
+  "cumulative_limit_count": 70,
   "hit_count": 5,
   "hit_rate": 22.727272727272727,
+  "win_rate": 50.0,
+  "win_count": 11,
+  "win_total": 22,
   "hit_codes": [
-    "605288.SH",
     "603773.SH",
-    "000859.SZ",
+    "605288.SH",
     "003036.SZ",
+    "000859.SZ",
     "002654.SZ"
   ],
   "miss_codes": [
-    "603203.SH",
-    "002989.SZ",
-    "002226.SZ",
-    "603311.SH",
-    "600037.SH",
     "603216.SH",
-    "002909.SZ",
-    "002208.SZ",
-    "603439.SH",
+    "603311.SH",
     "002861.SZ",
-    "002185.SZ",
+    "603439.SH",
+    "002208.SZ",
+    "600037.SH",
     "600338.SH",
-    "603399.SH",
-    "601126.SH",
+    "002185.SZ",
+    "603203.SH",
+    "002226.SZ",
     "002008.SZ",
+    "603399.SH",
+    "600130.SH",
+    "002989.SZ",
+    "601126.SH",
     "002812.SZ",
-    "600130.SH"
+    "002909.SZ"
   ],
   "hit_details": [
-    {
-      "code": "605288.SH",
-      "name": "凯迪股份"
-    },
     {
       "code": "603773.SH",
       "name": "沃格光电"
     },
     {
-      "code": "000859.SZ",
-      "name": "国风新材"
+      "code": "605288.SH",
+      "name": "凯迪股份"
     },
     {
       "code": "003036.SZ",
       "name": "泰坦股份"
+    },
+    {
+      "code": "000859.SZ",
+      "name": "国风新材"
     },
     {
       "code": "002654.SZ",
@@ -54,29 +57,29 @@
   ],
   "dim_performance": {
     "fundamental": {
-      "total": 73,
+      "total": 22,
       "hit_avg": 51.2,
-      "miss_avg": 51.2
+      "miss_avg": 60.7
     },
     "technical": {
-      "total": 73,
+      "total": 22,
       "hit_avg": 28.8,
-      "miss_avg": 10.8
+      "miss_avg": 20.0
     },
     "fundflow": {
-      "total": 73,
-      "hit_avg": 9.6,
-      "miss_avg": 2.6
+      "total": 22,
+      "hit_avg": 5.4,
+      "miss_avg": 6.2
     },
     "sentiment": {
-      "total": 73,
+      "total": 22,
       "hit_avg": 17.8,
-      "miss_avg": 10.2
+      "miss_avg": 13.5
     }
   },
   "confidence_dist": {
     "high": 0,
-    "medium": 20,
-    "low": 53
+    "medium": 12,
+    "low": 10
   }
 }
