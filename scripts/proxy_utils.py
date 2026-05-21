@@ -21,7 +21,8 @@ from pathlib import Path
 
 # 加载.env
 from dotenv import load_dotenv
-PROJECT_DIR = Path("/Users/zhangying/projects/study/maneki-agent")
+SCRIPT_PATH = Path(__file__).resolve().parent.parent
+PROJECT_DIR = SCRIPT_PATH if str(SCRIPT_PATH).endswith("maneki-agent") else Path.cwd()
 load_dotenv(PROJECT_DIR / ".env")
 
 # === 代理IP服务配置 (从.env读取) ===
@@ -118,7 +119,7 @@ def get_proxies_dict(proxy_addr=None):
 
     Args:
         proxy_addr: "ip:port"格式，None则自动获取
-    Returns: {"http": "http://ip:port", "https": "http://ip:port"} 或 None
+    Returns: {"http": "http://user:pass@ip:port", "https": "http://user:pass@ip:port"} 或 None
     """
     if not is_proxy_enabled():
         return None

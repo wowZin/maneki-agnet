@@ -35,7 +35,8 @@ from pathlib import Path
 
 import proxy_utils
 
-PROJECT_DIR = Path("/Users/zhangying/projects/study/maneki-agent")
+SCRIPT_PATH = Path(__file__).resolve().parent.parent
+PROJECT_DIR = SCRIPT_PATH if str(SCRIPT_PATH).endswith("maneki-agent") else Path.cwd()
 DATA_DIR = PROJECT_DIR / "data" / "signals"
 CDP_PORT = 9222
 CDP_LIST_URL = f"http://localhost:{CDP_PORT}/json/list"
