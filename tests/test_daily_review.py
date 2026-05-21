@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
 zt_daily_review.py 单元测试
-覆盖: build_signal_pct_map, calculate_win_rate, analyze_dimension_performance, confidence_distribution
+覆盖: build_signal_pct_map, calculate_win_rate, analyze_dimension_performance, confidence_distribution, load_today_analysis推送规则
 """
 
+import json
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 # 项目根目录
 PROJECT_DIR = Path(__file__).parent.parent
@@ -16,6 +18,7 @@ from scripts.zt_daily_review import (
     calculate_win_rate,
     analyze_dimension_performance,
     confidence_distribution,
+    load_today_analysis,
     safe_float,
 )
 
@@ -311,3 +314,134 @@ class TestConfidenceDistribution:
         assert result["high"] == 1
         assert result["medium"] == 1
         assert result["low"] == 1
+
+
+# ===== load_today_analysis 推送规则测试 =====
+
+class TestLoadTodayAnalysisPushRule:
+    """测试推送规则：>=50取前3（按总分降序），<50不推送"""
+
+    def _setup_dirs(self, tmp_path):
+        """创建 data/analysis + data/pushed 目录，返回 data 目录"""
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(exist_ok=True)
+        (data_dir / "analysis").mkdir(exist_ok=True)
+        (data_dir / "pushed").mkdir(exist_ok=True)
+        return data_dir
+
+    def _write_analysis(self, data_dir, filename, data):
+        """写入分析文件"""
+        (data_dir / "analysis" / filename).write_text(
+            json.dumps(data, ensure_ascii=False)
+        )
+
+    def test_above_50_top3_sorted(self, tmp_path):
+        """5只>=50分，只推送前3（按总分降序）"""
+        data_dir = self._setup_dirs(tmp_path)
+        self._write_analysis(data_dir, "20260521_0930.json", [
+            {"code": "A", "total": 80},
+            {"code": "B", "total": 70},
+            {"code": "C", "total": 60},
+            {"code": "D", "total": 55},
+            {"code": "E", "total": 50},
+        ])
+        with patch("scripts.zt_daily_review.PROJECT_DIR", tmp_path):
+            all_items, pushed_items = load_today_analysis("20260521")
+        pushed_codes = [p["code"] for p in pushed_items]
+        assert len(pushed_codes) == 3
+        assert "A" in pushed_codes
+        assert "B" in pushed_codes
+        assert "C" in pushed_codes
+
+    def test_all_below_50_no_push(self, tmp_path):
+        """全部<50分，不推送"""
+        data_dir = self._setup_dirs(tmp_path)
+        self._write_analysis(data_dir, "20260521_0930.json", [
+            {"code": "A", "total": 40},
+            {"code": "B", "total": 30},
+            {"code": "C", "total": 20},
+        ])
+        with patch("scripts.zt_daily_review.PROJECT_DIR", tmp_path):
+            all_items, pushed_items = load_today_analysis("20260521")
+        assert pushed_items == []
+
+    def test_exactly_3_above_50(self, tmp_path):
+        """恰好3只>=50，全部推送"""
+        data_dir = self._setup_dirs(tmp_path)
+        self._write_analysis(data_dir, "20260521_0930.json", [
+            {"code": "A", "total": 80},
+            {"code": "B", "total": 60},
+            {"code": "C", "total": 50},
+        ])
+        with patch("scripts.zt_daily_review.PROJECT_DIR", tmp_path):
+            all_items, pushed_items = load_today_analysis("20260521")
+        assert len(pushed_items) == 3
+
+    def test_1_above_50_and_many_below(self, tmp_path):
+        """1只>=50 + 多只<50，只推1只"""
+        data_dir = self._setup_dirs(tmp_path)
+        self._write_analysis(data_dir, "20260521_0930.json", [
+            {"code": "A", "total": 55},
+            {"code": "B", "total": 40},
+            {"code": "C", "total": 30},
+            {"code": "D", "total": 20},
+        ])
+        with patch("scripts.zt_daily_review.PROJECT_DIR", tmp_path):
+            all_items, pushed_items = load_today_analysis("20260521")
+        assert len(pushed_items) == 1
+        assert pushed_items[0]["code"] == "A"
+
+    def test_sorted_by_total_desc(self, tmp_path):
+        """推送结果按总分降序排列"""
+        data_dir = self._setup_dirs(tmp_path)
+        # 故意乱序输入
+        self._write_analysis(data_dir, "20260521_0930.json", [
+            {"code": "C", "total": 60},
+            {"code": "A", "total": 80},
+            {"code": "B", "total": 70},
+            {"code": "D", "total": 40},
+        ])
+        with patch("scripts.zt_daily_review.PROJECT_DIR", tmp_path):
+            all_items, pushed_items = load_today_analysis("20260521")
+        totals = [p["total"] for p in pushed_items]
+        assert totals == sorted(totals, reverse=True)
+
+    def test_boundary_50_included(self, tmp_path):
+        """总分=50的股票应被推送"""
+        data_dir = self._setup_dirs(tmp_path)
+        self._write_analysis(data_dir, "20260521_0930.json", [
+            {"code": "A", "total": 50},
+        ])
+        with patch("scripts.zt_daily_review.PROJECT_DIR", tmp_path):
+            all_items, pushed_items = load_today_analysis("20260521")
+        assert len(pushed_items) == 1
+        assert pushed_items[0]["code"] == "A"
+
+    def test_boundary_49_excluded(self, tmp_path):
+        """总分=49的股票不应被推送"""
+        data_dir = self._setup_dirs(tmp_path)
+        self._write_analysis(data_dir, "20260521_0930.json", [
+            {"code": "A", "total": 49},
+        ])
+        with patch("scripts.zt_daily_review.PROJECT_DIR", tmp_path):
+            all_items, pushed_items = load_today_analysis("20260521")
+        assert pushed_items == []
+
+    def test_multi_slot_accumulation(self, tmp_path):
+        """多时段累加：每时段独立取前3，跨时段累加去重"""
+        data_dir = self._setup_dirs(tmp_path)
+        # 时段1: A(80), B(70) >= 50
+        self._write_analysis(data_dir, "20260521_0930.json", [
+            {"code": "A", "total": 80},
+            {"code": "B", "total": 70},
+        ])
+        # 时段2: C(90), D(60) >= 50
+        self._write_analysis(data_dir, "20260521_1000.json", [
+            {"code": "C", "total": 90},
+            {"code": "D", "total": 60},
+        ])
+        with patch("scripts.zt_daily_review.PROJECT_DIR", tmp_path):
+            all_items, pushed_items = load_today_analysis("20260521")
+        pushed_codes = {p["code"] for p in pushed_items}
+        # 4只都>=50，跨时段累加去重后应全部在推送池
+        assert pushed_codes == {"A", "B", "C", "D"}

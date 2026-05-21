@@ -2495,20 +2495,23 @@ def push_feishu(results):
     """发送飞书卡片
 
     推送规则：
-    - 综合分>=50的股票全部推送
-    - 如果没有>=50的股票，推送前5只（降级兜底）
+    - 综合分>=50的股票按总分降序取前3只推送
+    - 如果没有>=50的股票，不推送
     - 推送记录保存到 data/pushed/ 目录，供复盘使用
     """
     import requests
 
     # 推送筛选
-    above_50 = [r for r in results if r.get('total', 0) >= 50]
+    above_50 = sorted(
+        [r for r in results if r.get('total', 0) >= 50],
+        key=lambda x: x.get('total', 0), reverse=True
+    )[:3]
     if above_50:
         push_list = above_50
-        print(f"  推送池: {len(above_50)}只(综合分>=50)")
+        print(f"  推送池: {len(above_50)}只(综合分>=50前3)")
     else:
-        push_list = results[:5]
-        print(f"  无>=50分股票，降级推送前5只")
+        push_list = []
+        print(f"  无>=50分股票，不推送")
 
     if not push_list:
         print("  无可推送股票")
