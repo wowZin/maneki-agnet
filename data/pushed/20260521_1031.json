@@ -1,0 +1,142 @@
+[
+  {
+    "code": "000988.SZ",
+    "name": "华工科技",
+    "scores": {
+      "fundamental": 70.5,
+      "technical": 63,
+      "fundflow": 0,
+      "sentiment": 19
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=13.9%; 扣非净利+21%; 34个概念; 股东户数+20.8%",
+      "technical": "[中] 温和放量(vol/3d=1.3)+15; 均线多头+15; 回踩MA10企稳+10; 低位密集(集中度10.6%)+10; 获利盘70.2%锁定+5",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-2.8%<5%",
+      "sentiment": "[无] 34概念+8; 题材工业机器人+5; 换手13.0%情绪活跃+2; 20日涨停+1; 竞价关注度较高(量比0.7)+1; 竞价成交15851万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 38.125,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603083.SH",
+    "name": "剑桥科技",
+    "scores": {
+      "fundamental": 71.5,
+      "technical": 50,
+      "fundflow": 0,
+      "sentiment": 21
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=1.6%偏低; 扣非净利+286%; 营收+44%; 10个概念",
+      "technical": "[低] 均线多头+15; 回踩MA10企稳+10; 下影线支撑+4; 低位密集(集中度5.5%)+10; 获利盘78.1%锁定+5",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比4.2%<5%",
+      "sentiment": "[无] 10概念+8; 题材华为概念+5; 换手12.3%情绪活跃+2; 20日涨停2次+3; 竞价关注度较高(量比0.6)+1; 竞价成交4265万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 35.625,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002937.SZ",
+    "name": "兴瑞科技",
+    "scores": {
+      "fundamental": 58.0,
+      "technical": 54,
+      "fundflow": 13,
+      "sentiment": 10
+    },
+    "reasons": {
+      "fundamental": "[中] 扣非净利-25%; 8个概念; 股东户数-8.5%",
+      "technical": "[低] 换手=4.5%+10; 均线多头+15; 回踩MA10企稳+10; 下影线支撑+4; 低位密集(集中度9.8%)+10",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]5.0%-5; [龙虎11分] [盘中]封单2240.3%流通市值+10 [盘中]早封板09:34:54+8 [盘中]开板10次-7; [盘口0分] 净流出1.10亿; [融资2分] [盘中]融资买入占比100.0%+2",
+      "sentiment": "[无] 8概念+8; 竞价关注度较高(量比0.7)+1; 竞价成交329万+1"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 33.75,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002281.SZ",
+    "name": "光迅科技",
+    "scores": {
+      "fundamental": 62.5,
+      "technical": 52,
+      "fundflow": 0,
+      "sentiment": 19
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=2.3%偏低; 扣非净利+61%; 14个概念; 股东户数+41.6%",
+      "technical": "[低] 换手=9.8%+10; 均线多头+15; 回踩MA10企稳+10; 下影线支撑+4; 获利盘69.2%锁定+5",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-3.0%<5%",
+      "sentiment": "[无] 14概念+8; 题材华为概念+5; 20日涨停3次+3; 竞价跳空-2.6%[震荡态×1.0]→0分; 竞价关注度较高(量比1.1)+1; 竞价成交20189万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 33.375,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002158.SZ",
+    "name": "汉钟精机",
+    "scores": {
+      "fundamental": 65.0,
+      "technical": 30,
+      "fundflow": 11,
+      "sentiment": 25
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=10.9%; 扣非净利-2%; 16个概念; 股东户数-9.8%",
+      "technical": "[无] 均线多头+15; 回踩MA10企稳+10; 获利盘100.0%锁定+5; 收盘/BOLL中轨1.190>1.01+3[VWAP代理]; 主力净流出55.1%-8",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比[T-1]34.6%+10; [龙虎11分] [盘中]封单49.9%流通市值+10 [盘中]早封板09:51:15+8 [盘中]开板45次-7; [盘口0分] 净流出0.87亿; [融资0分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2 [盘中]融资3日连降-5",
+      "sentiment": "[无] 16概念+8; 题材光伏概念+5; 20日涨停3次+3; 竞价跳空1.1%[震荡态×1.0]→1分; 竞价关注度极高(量比7.6)+5; 竞价量比4.3+1"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 32.75,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  }
+]

@@ -1,0 +1,142 @@
+[
+  {
+    "code": "002371.SZ",
+    "name": "北方华创",
+    "scores": {
+      "fundamental": 85.0,
+      "technical": 30,
+      "fundflow": 15,
+      "sentiment": 21
+    },
+    "reasons": {
+      "fundamental": "[高] ROE=16.1%; 23个概念; 股东户数-7.0%; 业绩+筹码共振",
+      "technical": "[无] 均线多头+15; 回踩MA10企稳+10; 获利盘98.9%锁定+5; 收盘/BOLL中轨1.211>1.01+3[VWAP代理]; 主力净流出6.2%-8",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]6.3%-5; [龙虎13分] [盘中]封单689.2%流通市值+10 [盘中]开板1次+3; [盘口0分] 净流出4.12亿; [融资2分] [盘中]融资买入占比100.0%+2",
+      "sentiment": "[无] 23概念+8; 热门题材+10; 竞价关注度较高(量比0.7)+1; 竞价成交7603万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 37.75,
+    "resonance": {
+      "count": 1,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603083.SH",
+    "name": "剑桥科技",
+    "scores": {
+      "fundamental": 71.5,
+      "technical": 50,
+      "fundflow": 0,
+      "sentiment": 21
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=1.6%偏低; 扣非净利+286%; 营收+44%; 10个概念",
+      "technical": "[低] 均线多头+15; 回踩MA10企稳+10; 下影线支撑+4; 低位密集(集中度5.5%)+10; 获利盘78.1%锁定+5",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比4.2%<5%",
+      "sentiment": "[无] 10概念+8; 题材华为概念+5; 换手12.3%情绪活跃+2; 20日涨停2次+3; 竞价关注度较高(量比0.6)+1; 竞价成交4265万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 35.625,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "600869.SH",
+    "name": "远东股份",
+    "scores": {
+      "fundamental": 63.8,
+      "technical": 43,
+      "fundflow": 0,
+      "sentiment": 20
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=1.4%偏低; 扣非净利+177%; 23个概念; 股东户数-3.6%; 负债率80%",
+      "technical": "[低] 换手=4.8%+10; 均线多头+15; 回踩MA10企稳+10; 假突破:3日中2日长上影-4; 下影线支撑+4",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-0.3%<5%",
+      "sentiment": "[无] 23概念+8; 题材光伏概念+5; 20日涨停2次+3; 竞价跳空2.0%[震荡态×1.0]→1分; 竞价关注度较高(量比1.0)+1; 竞价成交2510万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 31.7,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "000672.SZ",
+    "name": "上峰水泥",
+    "scores": {
+      "fundamental": 54.0,
+      "technical": 58,
+      "fundflow": 0,
+      "sentiment": 14
+    },
+    "reasons": {
+      "fundamental": "[低] 扣非净利-58%; 10个概念; 股东户数-4.9%",
+      "technical": "[中] 换手=6.9%+10; 温和放量(vol/3d=1.4)+15; 均线多头+15; 回踩MA10企稳+10; 获利盘89.3%锁定+5",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-4.1%<5%",
+      "sentiment": "[无] 10概念+8; 20日涨停3次+3; 竞价关注度较高(量比1.0)+1; 竞价成交1179万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 31.5,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603115.SH",
+    "name": "海星股份",
+    "scores": {
+      "fundamental": 55.0,
+      "technical": 63,
+      "fundflow": 0,
+      "sentiment": 6
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=1.8%偏低; 扣非净利+85%; 股东户数+32.3%",
+      "technical": "[中] 换手=4.8%+10; 温和放量(vol/3d=1.3)+15; 均线多头+15; 回踩MA10企稳+10; 获利盘94.2%锁定+5",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-6.7%<5%",
+      "sentiment": "[无] 20日涨停3次+3; 竞价跳空-1.1%[震荡态×1.0]→0分; 竞价关注度较高(量比0.6)+1; 竞价成交640万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 31.0,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  }
+]

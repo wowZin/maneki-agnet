@@ -1,0 +1,66 @@
+{
+  "date": "20260521",
+  "pushed_count": 25,
+  "cumulative_limit_count": 38,
+  "hit_count": 0,
+  "hit_rate": 0.0,
+  "win_rate": 8.0,
+  "win_count": 2,
+  "win_total": 25,
+  "hit_codes": [],
+  "miss_codes": [
+    "002056.SZ",
+    "000988.SZ",
+    "001211.SZ",
+    "605376.SH",
+    "002937.SZ",
+    "002947.SZ",
+    "000551.SZ",
+    "603186.SH",
+    "603083.SH",
+    "002158.SZ",
+    "000672.SZ",
+    "002364.SZ",
+    "603115.SH",
+    "603375.SH",
+    "600869.SH",
+    "603938.SH",
+    "002371.SZ",
+    "002885.SZ",
+    "002008.SZ",
+    "603063.SH",
+    "002246.SZ",
+    "002277.SZ",
+    "600783.SH",
+    "002281.SZ",
+    "603663.SH"
+  ],
+  "hit_details": [],
+  "dim_performance": {
+    "fundamental": {
+      "total": 25,
+      "hit_avg": 0,
+      "miss_avg": 64.5
+    },
+    "technical": {
+      "total": 25,
+      "hit_avg": 0,
+      "miss_avg": 49.1
+    },
+    "fundflow": {
+      "total": 25,
+      "hit_avg": 0,
+      "miss_avg": 17.6
+    },
+    "sentiment": {
+      "total": 25,
+      "hit_avg": 0,
+      "miss_avg": 16.3
+    }
+  },
+  "confidence_dist": {
+    "high": 4,
+    "medium": 21,
+    "low": 0
+  }
+}

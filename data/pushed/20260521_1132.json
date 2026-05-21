@@ -1,0 +1,142 @@
+[
+  {
+    "code": "002277.SZ",
+    "name": "友阿股份",
+    "scores": {
+      "fundamental": 50.2,
+      "technical": 47,
+      "fundflow": 44,
+      "sentiment": 20
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=-5.1%偏低; 24个概念; 流动性风险",
+      "technical": "[低] 换手=3.3%+10; 均线多头+15; MA60下倾-5; 回踩MA10企稳+10; 下影线支撑+4",
+      "fundflow": "[低] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]13.7%-5; [龙虎17分] [盘中]封单6591.7%流通市值+10 [盘中]秒封/一字板+7; [盘口16分] 净流入0.07亿+10 换手3.3%+6; [融资4分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2; [锁仓7分] 流入递增锁仓+7",
+      "sentiment": "[无] 24概念+8; 题材工业机器人+5; 20日涨停+1; 竞价跳空2.9%[震荡态×1.0]→1分; 竞价关注度高(量比2.9)+3; 竞价成交905万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 40.3,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603186.SH",
+    "name": "华正新材",
+    "scores": {
+      "fundamental": 71.5,
+      "technical": 58,
+      "fundflow": 0,
+      "sentiment": 15
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=17.4%; 扣非净利+103%; 3个概念; 股东户数+8.2%; 负债率64%",
+      "technical": "[中] 换手=10.3%+10; 均线多头+15; 回踩MA10企稳+10; 低位密集(集中度11.1%)+10; 获利盘99.9%锁定+5",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比3.1%<5%",
+      "sentiment": "[无] 换手10.3%情绪活跃+2; 20日涨停2次+3; 竞价跳空5.3%[震荡态×1.0]→5分; 竞价关注度高(量比2.3)+3; 竞价成交4420万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 36.125,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603375.SH",
+    "name": "盛景微",
+    "scores": {
+      "fundamental": 34.5,
+      "technical": 73,
+      "fundflow": 25,
+      "sentiment": 10
+    },
+    "reasons": {
+      "fundamental": "[无] ROE=0.6%偏低; 扣非净利-600%; 股东户数+48.8%",
+      "technical": "[中] 换手=10.6%+10; 温和放量(vol/3d=1.8)+15; 均线多头+15; 回踩MA10企稳+10; 低位密集(集中度6.2%)+10",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]11.5%-5; [龙虎0分] [盘中]无封板数据; [盘口14分] 净流入0.08亿+10 换手10.6%活跃+4; [融资4分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2; [锁仓7分] 流入递增锁仓+7",
+      "sentiment": "[无] 换手10.6%情绪活跃+2; 20日涨停2次+3; 竞价跳空-2.3%[震荡态×1.0]→0分; 竞价关注度高(量比1.6)+3; 竞价成交558万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 35.625,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "000551.SZ",
+    "name": "创元科技",
+    "scores": {
+      "fundamental": 75.0,
+      "technical": 54,
+      "fundflow": 0,
+      "sentiment": 11
+    },
+    "reasons": {
+      "fundamental": "[高] ROE=10.7%; 扣非净利+34%; 21个概念",
+      "technical": "[低] 换手=4.5%+10; 均线多头+15; 回踩MA10企稳+10; 下影线支撑+4; 低位密集(集中度11.0%)+10",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-12.8%<5%",
+      "sentiment": "[无] 21概念+8; 20日涨停+1; 竞价关注度较高(量比1.0)+1; 竞价成交405万+1"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 35.0,
+    "resonance": {
+      "count": 1,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002364.SZ",
+    "name": "中恒电气",
+    "scores": {
+      "fundamental": 61.5,
+      "technical": 54,
+      "fundflow": 0,
+      "sentiment": 20
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=1.0%偏低; 扣非净利+20%; 10个概念",
+      "technical": "[低] 换手=8.8%+10; 均线多头+15; 回踩MA10企稳+10; 下影线支撑+4; 低位密集(集中度8.6%)+10",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比2.3%<5%",
+      "sentiment": "[无] 10概念+8; 题材储能+5; 20日涨停2次+3; 竞价跳空1.2%[震荡态×1.0]→1分; 竞价关注度较高(量比1.4)+1; 竞价成交3486万+2"
+    },
+    "weights": {
+      "fundamental": "1.0",
+      "technical": "1.0",
+      "fundflow": "1.0",
+      "sentiment": "1.0"
+    },
+    "total": 33.875,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  }
+]
