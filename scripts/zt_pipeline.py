@@ -3222,12 +3222,12 @@ def push_feishu(results):
     for r in push_list:
         s = r.get('scores', {})
         stars = _stars(r['total'])
-        top3_line = f"\\nTop3择优: {r.get('top3_score',0):.1f}" if r.get('top3_score') is not None else ""
+        top3_line = f"\nTop3择优: {r.get('top3_score',0):.1f}" if r.get('top3_score') is not None else ""
         element = {
             "tag": "div",
             "text": {
                 "tag": "lark_md",
-                "content": f"**{r['code']} {r['name']}** {stars}\\n"
+                "content": f"**{r['code']} {r['name']}** {stars}\n"
                           f"基本面:{s.get('fundamental',0):.0f} 技术面:{s.get('technical',0):.0f} 资金面:{s.get('fundflow',0):.0f} 情绪面:{s.get('sentiment',0):.0f} 短线:{s.get('shortterm',0):.0f}"
                           f"{top3_line}"
             }
