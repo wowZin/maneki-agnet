@@ -52,18 +52,17 @@
 | `anns_d` | 公司公告 | 基础 | 实时 | 返回JSON需解析 |
 | `concept_detail` | 概念板块映射 | 概念权限 | 静态 | **需单独开通概念权限**;字段名是`concept_name`非`name` |
 
-## 东方财富 API (2个)
+## 东方财富 API (2个，复用为多缓存)
 
 > 数据优先级: **requests+代理(Eastmoney) > Tushare**。实时数据优先走东财API+代理，Tushare仅作兜底。
 > 方式: **requests + zdtps代理**。代理配置: `.env` 中 `PROXY_ENABLED=true`, 模块 `scripts/proxy_utils.py`
 
-| 接口 | 用途 | 方式 | 已知坑 |
+| 接口 | 用途 | 关键字段 | 已知坑 |
 |------|------|------|------|
-| `push2.eastmoney.com/api/qt/clist/get` | 异动扫描/行情列表 | requests+代理 | `po=0`升序/`po=1`降序;代理IP约2-3分钟过期 |
-| `push2.eastmoney.com/api/qt/stock/get` | 个股实时行情(分时数据) | requests+代理 | secid格式:`{market}.{code}` |
+| `push2.eastmoney.com/api/qt/clist/get` | 异动扫描/行情/资金流/人气 | f3(涨幅) f11(涨速) f62(主力净流入) f10(量比) f6(成交额) f7(换手率) | `po=0`升序/`po=1`降序;代理IP约2-3分钟过期 |
+| `push2.eastmoney.com/api/qt/stock/get` | 个股实时行情(分时数据) | f170(涨跌幅) | secid格式:`{market}.{code}` |
 
-> ⚠️ `push2.eastmoney.com` 被本服务器TCP层封禁，必须走zdtps动态代理(`s189.zdtps.com:8080`)。
-> CDP模式已废弃，异动扫描使用 requests+代理 直接调东财clist API。
+> 三个缓存复用同一API: `_get_realtime_fund_cache`(f62/f10/f7/f6) + `_get_popularity_rank`(f62) + `_get_realtime_pct_cache`(f3)
 
 ## 关键时序窗口
 
