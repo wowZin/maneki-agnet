@@ -3367,6 +3367,17 @@ def push_feishu(results):
         return False
 
 # ===== 主流程 =====
+def _write_empty_result(reason=""):
+    """写入零结果分析文件（兜底：避免扫空静默失败）"""
+    now = datetime.now()
+    ts = now.strftime("%Y%m%d_%H%M")
+    output_path = PROJECT_DIR / "data" / "analysis" / f"{ts}.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    empty = [{"_empty": True, "reason": reason, "time": now.isoformat()}]
+    with open(output_path, "w") as f:
+        json.dump(empty, f, ensure_ascii=False)
+    print(f"零结果已记录: {output_path}")
+
 def main():
     parser = argparse.ArgumentParser(description="涨停预测流程")
     parser.add_argument("--from-file", help="从已有信号文件加载", default=None)
@@ -3388,6 +3399,8 @@ def main():
     
     if not candidates:
         print("无候选股，退出")
+        # 兜底：扫空也写零结果文件，避免静默失败
+        _write_empty_result("扫描无候选股")
         return
     
     # 取前N只做分析
@@ -3399,6 +3412,7 @@ def main():
     candidates = filter_candidates(candidates)
     if not candidates:
         print("过滤后无候选股，退出")
+        _write_empty_result("过滤后无候选股")
         return
     
     # 2-5. 四维度评分 + 短线博弈
