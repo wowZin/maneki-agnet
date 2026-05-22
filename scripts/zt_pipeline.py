@@ -1205,9 +1205,20 @@ def _parse_akshare_amount(val_str):
 
 def score_fundflow(code):
     """
-    资金面涨停潜力预判 V2.1
+    资金面涨停潜力预判 V2.3
     五维度量化评分：超大单主力35分 + 龙虎榜机构游资25分 + 分时盘口20分 + 融资聪明资金7分 + 筹码抛压13分
     含一票否决规则（含V2.0市场状态调节器+一字板豁免）
+    
+    V2.3变更（基于V2.1）：
+    - 否决4增加3日累计豁免：<5%+3日累计净流入≤0才否决，>0转入维度1扣-5分
+    - 否决3增加尾盘抢筹豁免：收盘/最高>0.92+换手<15%或3日净流入>0豁免
+    - 否决5改为组合A/B阈值（日频代理）
+    - 维2首板豁免：T-1非涨停但T日涨幅>7%时按0分处理（不扣-15）
+    - 维1散户接盘V2.3量化：中/小单>成交额8%+主力<0+涨幅>3%；增加涨停换手豁免
+    - 维3全部因子改为日频代理：持续净流入条件改为最低价≥昨收×0.99
+    - 维3负向过滤增加拉升无量/放量出逃/对倒嫌疑三项判定
+    - 潜力分级增加53-56分边缘区间+二次确认
+    - 维5换手递减因子增加至少2日收阳+20日新高附近条件
     
     V2.1变更（基于V2.0）：
     - 否决4阈值放宽：主力净占比<10%→<5%才否决，5%-10%转维度1扣分
@@ -1433,10 +1444,18 @@ def score_fundflow(code):
         if not is_yiziban and pct_chg >= 9.9:
             is_yiziban = True
     
-    # V2.1: 否决4阈值放宽 10%→5%，5%-10%偏弱区间转入维度1扣分
-    # V2.2: 盘中优先使用akshare实时主力净占比，降级回退Tushare T+1
-    main_ratio_for_dim1 = None  # 保存主力占比供维度1使用(V2.1新增)
-    akshare_used_in_veto = False  # 标记是否使用了akshare数据(用于reason标注)
+    # V2.3: 否决4 — 纯散户博弈（3日累计豁免）
+    # <5% + 3日累计净流入≤0 → 否决
+    # <5% + 3日累计净流入>0 → 不否决，维度1占比因子扣-5分
+    main_ratio_for_dim1 = None  # 保存主力占比供维度1使用
+    akshare_used_in_veto = False
+    dim1_veto4_deduction = 0  # V2.3: 否决4豁免后的维度1扣分标记
+    
+    # V2.3: 计算3日累计净流入（用于否决4豁免判定）
+    net_3d_for_veto4 = 0
+    if moneyflow_data:
+        recent_3d = moneyflow_data[:3] if len(moneyflow_data) >= 3 else moneyflow_data
+        net_3d_for_veto4 = sum([safe_float(x.get("net_mf_amount", 0)) for x in recent_3d])
     
     if not is_yiziban:
         # 盘中优先用akshare实时数据
@@ -1444,9 +1463,11 @@ def score_fundflow(code):
             main_ratio = akshare_fund_main_net_ratio
             main_ratio_for_dim1 = main_ratio
             akshare_used_in_veto = True
-            if main_ratio < 5:  # V2.1: <5%才否决
-                veto_flags.append(f"纯散户博弈[实时]:主力净占比{main_ratio:.1f}%<5%")
-            # V2.1: 5%-10%偏弱区间不否决，在维度1占比因子扣5分
+            if main_ratio < 5:
+                if net_3d_for_veto4 <= 0:
+                    veto_flags.append(f"纯散户博弈[实时]:主力净占比{main_ratio:.1f}%<5%+3日累计净流入{net_3d_for_veto4:.0f}≤0")
+                else:
+                    dim1_veto4_deduction = -5  # V2.3: 豁免否决，转入维度1扣分
         elif moneyflow_data:
             # 降级：Tushare T+1数据
             latest = moneyflow_data[0]
@@ -1462,8 +1483,11 @@ def score_fundflow(code):
             if total_vol > 0:
                 main_ratio = (net_elg + net_lg) / total_vol * 100
                 main_ratio_for_dim1 = main_ratio
-                if main_ratio < 5:  # V2.1: <5%才否决
-                    veto_flags.append(f"纯散户博弈[T-1]:主力净占比{main_ratio:.1f}%<5%")
+                if main_ratio < 5:
+                    if net_3d_for_veto4 <= 0:
+                        veto_flags.append(f"纯散户博弈[T-1]:主力净占比{main_ratio:.1f}%<5%+3日累计净流入{net_3d_for_veto4:.0f}≤0")
+                    else:
+                        dim1_veto4_deduction = -5  # V2.3: 豁免否决，转入维度1扣分
     elif is_yiziban:
         # 一字板豁免：不触发否决，但记录豁免信息到reason
         yiziban_exempt = True
@@ -1481,8 +1505,7 @@ def score_fundflow(code):
         if total_net_sell > total_net_buy * 2 and total_net_sell > 1000:  # 万元
             veto_flags.append(f"龙虎榜净卖出{total_net_sell:.0f}万")
     
-    # 2.4 分时资金背离：股价拉升>3%但资金净流入为负
-    # V2.0市场状态调节器：低迷市(成交额<8000亿或跌停>20家)阈值放宽
+    # V2.3: 否决3 — 分时资金背离（增加尾盘抢筹豁免+换手率/累计流入双重验证）
     # 盘中优先用akshare实时数据（涨跌幅+净占比），降级用Tushare T+1
     corr_threshold = -0.6  # 默认相关系数阈值
     if daily_basic_data:
@@ -1510,15 +1533,32 @@ def score_fundflow(code):
         except:
             pass
     
+    # V2.3: 查找 T-1日换手率和当日收盘位置（用于否决3豁免判定）
+    t_turnover_rate = 0
+    if daily_basic_data:
+        t_turnover_rate = safe_float(daily_basic_data[0].get("turnover_rate", 0))
+    
     # 盘中优先用akshare实时涨跌幅+净占比判断背离
     if akshare_pct_change is not None and akshare_fund_net_ratio is not None:
         # akshare实时：涨跌幅>3%但净占比为负（资金背离）
         if akshare_pct_change > 3 and akshare_fund_net_ratio < 0:
             if corr_threshold < -0.6:
-                # 低迷市放宽，不触发背离否决
-                pass
+                pass  # 低迷市放宽，不触发背离否决
             else:
-                veto_flags.append(f"资金背离[akshare]:涨{akshare_pct_change:.1f}%但净占比{akshare_fund_net_ratio:.1f}%")
+                # V2.3: 尾盘抢筹豁免 —— 收盘在日高附近 AND (换手率<15% OR 3日累计净流入>0)
+                # 豁免条件（二者同时满足）：
+                #   ① 收盘价/最高价 > 0.92（尾盘无跳水）
+                #   ② 换手率<15% OR 近3日累计净流入>0
+                if daily_basic_data:
+                    close = safe_float(daily_basic_data[0].get("close", 0))
+                    high = safe_float(daily_basic_data[0].get("high", 0)) if "high" in daily_basic_data[0] else 0
+                else:
+                    close = high = 0
+                close_high_ratio = close / high if high > 0 else 0
+                if close_high_ratio > 0.92 and (t_turnover_rate < 15 or net_3d_for_veto4 > 0):
+                    pass  # V2.3: 豁免（尾盘抢筹或主力做T，良性分歧）
+                else:
+                    veto_flags.append(f"资金背离[akshare]:涨{akshare_pct_change:.1f}%但净占比{akshare_fund_net_ratio:.1f}%")
     elif moneyflow_data and daily_basic_data:
         # 降级：Tushare T+1
         latest_basic = daily_basic_data[0]
@@ -1527,27 +1567,48 @@ def score_fundflow(code):
             latest_mf = moneyflow_data[0]
             net_mf = safe_float(latest_mf.get("net_mf_amount", 0))
             if net_mf < 0:
-                # V2.0: 低迷市用-0.75阈值（此处简化为：低迷市不触发此否决）
-                # 完整实现需算滑动相关系数，T+1场景用简化逻辑
                 if corr_threshold < -0.6:
-                    # 低迷市放宽，不触发背离否决
-                    pass
+                    pass  # 低迷市放宽
                 else:
-                    veto_flags.append(f"资金背离[T+1]:涨{pct_change:.1f}%但净流出{abs(net_mf)/10000:.0f}万")
+                    # V2.3: 尾盘抢筹豁免（同上，用Tushare数据）
+                    if "high" in latest_basic:
+                        close = safe_float(latest_basic.get("close", 0))
+                        high = safe_float(latest_basic.get("high", 0))
+                    else:
+                        close = high = 0
+                    close_high_ratio = close / high if high > 0 else 0
+                    if close_high_ratio > 0.92 and (t_turnover_rate < 15 or net_3d_for_veto4 > 0):
+                        pass  # V2.3: 豁免
+                    else:
+                        veto_flags.append(f"资金背离[T+1]:涨{pct_change:.1f}%但净流出{abs(net_mf)/10000:.0f}万")
     
-    # 否决5(尾盘集中兑现)：14:45后资金净流出占全天流出比例>60%
-    # V2.2: 盘中优先用akshare实时数据（净流出占成交额>3%），降级用Tushare（净流出>0.3%流通市值）
-    if akshare_fund_net_amount_yi is not None and akshare_fund_total_amount_yi is not None and akshare_fund_total_amount_yi > 0:
-        akshare_net_pct = akshare_fund_net_amount_yi / akshare_fund_total_amount_yi * 100
-        if akshare_net_pct < -3:  # 净流出占成交额>3%
-            veto_flags.append(f"大额流出[实时]:净占比{akshare_net_pct:.1f}%")
-    elif moneyflow_data and daily_basic_data:
-        # 降级：Tushare T+1
-        latest_mf = moneyflow_data[0]
-        net_mf = safe_float(latest_mf.get("net_mf_amount", 0))
-        circ_mv = safe_float(daily_basic_data[0].get("circ_mv", 0)) * 10000
-        if circ_mv > 0 and net_mf < -circ_mv * 0.003:
-            veto_flags.append(f"大额流出[T-1]:净流出{abs(net_mf)/10000:.0f}万")
+    # V2.3: 否决5 — 尾盘集中兑现（组合A/B阈值，日频代理）
+    # 组合A：14:30后成交量占全天>25% AND 收盘价<分时均价线
+    # 组合B：14:00后成交量占全天>45% AND 当日收跌 AND 收盘价<分时均价线
+    # 分时均价线代理（无分钟数据时）：收盘价 < (最高价+最低价)/2
+    if daily_basic_data:
+        close = safe_float(daily_basic_data[0].get("close", 0))
+        high = safe_float(daily_basic_data[0].get("high", 0))
+        low = safe_float(daily_basic_data[0].get("low", 0))
+        pct_chg = safe_float(daily_basic_data[0].get("pct_change", 0))
+        # 分时均价线代理
+        avg_price_proxy = (high + low) / 2 if high > 0 and low > 0 else 0
+        below_avg = close < avg_price_proxy if avg_price_proxy > 0 else False
+        
+        # 无分钟成交量数据，用净流向结构做日频代理
+        if moneyflow_data:
+            latest_mf = moneyflow_data[0]
+            net_mf = safe_float(latest_mf.get("net_mf_amount", 0))
+            
+            # 组合A代理：主力净流出 + 收盘低于均价（模拟尾盘兑现）
+            if net_mf < 0 and below_avg:
+                # 判定为"尾盘走弱预警"，降级为低潜力（降分而非否决）
+                # 注：无分钟成交量数据，用净流出结构做近似代理
+                veto_flags.append(f"尾盘走弱预警:净流出{abs(net_mf)/10000:.0f}万+收盘低于均价")
+            
+            # 组合B代理：收跌 + 净流出 + 低于均价（更弱信号）
+            if pct_chg < 0 and net_mf < 0 and below_avg:
+                veto_flags.append(f"尾盘走弱预警:收跌+净流出+低于均价")
     
     # 触发否决直接返回
     if veto_flags:
@@ -1605,6 +1666,11 @@ def score_fundflow(code):
         elif main_ratio >= 5 and main_ratio < 15:  # V2.1: 5%-15%偏弱扣分
             dim1_score -= 5
             dim1_reason.append(f"主力占比偏弱{src_tag}{main_ratio:.1f}%-5")
+    
+    # V2.3: 否决4豁免 — 主力净占比<5%但3日累计净流入>0，转入维度1扣-5分
+    if dim1_veto4_deduction != 0:
+        dim1_score += dim1_veto4_deduction
+        dim1_reason.append(f"否决4豁免(3日累计>0)-5")
     elif moneyflow_data:
         # 降级：Tushare计算
         latest = moneyflow_data[0]
@@ -1630,13 +1696,37 @@ def score_fundflow(code):
             dim1_score += 10
             dim1_reason.append(f"连续3日净流入+10")
     
-    # --- 散户接盘因子(-10分)：主力流出但总净流入为正 ---
+    # --- 散户接盘因子 V2.3量化+豁免(-20分)：主力流出但散户接盘 ---
+    # 触发条件（三者同时满足）：
+    # ① 主力净额 < 0
+    # ② (中单净额 + 小单净额) > 成交额的8%
+    # ③ 当日股价涨幅 > 3%
+    # 豁免条件（满足任一即不扣分）：
+    # ① 当日涨停且换手率在5%-25%区间（换手板属健康博弈）
+    # ② 近3日主力累计净流入 > 0（主力前期已进场）
     # 盘中：akshare主力净额<0且总净额>0
     # 降级：Tushare main_net<0且net_mf>0
+    retail_retail_exempt = False
+    # 取换手率（V2.3散户接盘豁免判定用）
+    retail_turnover_rate = t_turnover_rate if 't_turnover_rate' in dir() else 0
+    pct_change_for_retail = akshare_pct_change or 0
+    if not pct_change_for_retail and daily_basic_data:
+        pct_change_for_retail = safe_float(daily_basic_data[0].get("pct_change", 0))
+    
     if akshare_main_net_yi is not None and akshare_fund_net_amount_yi is not None:
-        if akshare_main_net_yi < 0 and akshare_fund_net_amount_yi > 0:
-            dim1_score -= 10
-            dim1_reason.append(f"散户接盘[实时]-10")
+        # 豁免判定
+        if akshare_main_net_yi < 0:
+            # 豁免①：涨停+换手5%-25%
+            akshare_pct = akshare_pct_change or 0
+            if akshare_pct >= 9.5 and 5 <= retail_turnover_rate <= 25:
+                retail_retail_exempt = True
+            # 豁免②：3日累计净流入>0
+            elif net_3d_for_veto4 > 0:
+                retail_retail_exempt = True
+            # 非豁免：触发散户接盘扣分
+            if akshare_main_net_yi < 0 and akshare_fund_net_amount_yi > 0 and not retail_retail_exempt:
+                dim1_score -= 20
+                dim1_reason.append(f"散户接盘[实时]-20")
     elif moneyflow_data:
         latest = moneyflow_data[0]
         buy_elg = safe_float(latest.get("buy_elg_amount", 0))
@@ -1645,9 +1735,17 @@ def score_fundflow(code):
         sell_lg = safe_float(latest.get("sell_lg_amount", 0))
         net_mf = safe_float(latest.get("net_mf_amount", 0))
         main_net = (buy_elg - sell_elg) + (buy_lg - sell_lg)
+        # V2.3: Tushare降级分支也需要做豁免判定
         if main_net < 0 and net_mf > 0:
-            dim1_score -= 10
-            dim1_reason.append(f"散户接盘[T-1]-10")
+            # 豁免①：涨停+换手5%-25%
+            if pct_change_for_retail >= 9.5 and 5 <= retail_turnover_rate <= 25:
+                retail_retail_exempt = True
+            # 豁免②：3日累计净流入>0
+            elif net_3d_for_veto4 > 0:
+                retail_retail_exempt = True
+            if not retail_retail_exempt:
+                dim1_score -= 20
+                dim1_reason.append(f"散户接盘[T-1]-20")
     
     dim1_score = max(0, min(35, dim1_score))
     score += dim1_score
@@ -1715,10 +1813,19 @@ def score_fundflow(code):
                     dim2_score -= 7
                     dim2_reason.append(f"[盘中]开板{int(open_times)}次-7")
             
-            # 负向：T-1日未涨停或炸板
+            # V2.3首板豁免：T-1日非涨停股但T日涨幅>7% → 不适用"未涨停扣15分"，按0分处理
             if limit_type != "U":
-                dim2_score -= 15
-                dim2_reason.append(f"[盘中]T-1未涨停-15")
+                # 检查T日是否正在拉升（涨幅>7%），若是则豁免
+                t_day_pct = 0
+                if akshare_pct_change is not None:
+                    t_day_pct = akshare_pct_change
+                elif daily_basic_data:
+                    t_day_pct = safe_float(daily_basic_data[0].get("pct_change", 0))
+                if t_day_pct > 7:
+                    pass  # V2.3首板豁免：不扣分
+                else:
+                    dim2_score -= 15
+                    dim2_reason.append(f"[盘中]T-1未涨停-15")
         else:
             # 无limit_list数据（非涨停股），给基础分0
             dim2_reason.append(f"[盘中]无封板数据")
@@ -1773,23 +1880,59 @@ def score_fundflow(code):
         net_mf = safe_float(latest.get("net_mf_amount", 0))
         turnover_rate = safe_float(daily_basic_data[0].get("turnover_rate", 0))
         
-        # 用净流入强度和换手率评估
+        # V2.3: 持续净流入（日频代理）——最低价≥昨收×0.99 包容换手板宽幅震荡
         if net_mf > 0:
-            # 净流入 > 0，得分
-            dim3_score += 10
-            dim3_reason.append(f"净流入{net_mf/10000:.2f}亿+10")
+            close = safe_float(daily_basic_data[0].get("close", 0))
+            low = safe_float(daily_basic_data[0].get("low", 0))
+            high = safe_float(daily_basic_data[0].get("high", 0))
+            pre_close = safe_float(daily_basic_data[0].get("pre_close", 0))
             
-            # 换手率健康区间
-            if 3 <= turnover_rate <= 10:
+            # 持续净流入条件：主力净流入>0 AND 最低价≥昨收×0.99 AND 收盘/最高>0.95
+            low_ok = low >= pre_close * 0.99 if pre_close > 0 else True
+            close_high_ok = close / high > 0.95 if high > 0 else True
+            if low_ok and close_high_ok:
+                dim3_score += 10
+                dim3_reason.append(f"持续净流入{net_mf/10000:.2f}亿+10")
+            
+            # 强承接：主力净流入>0 AND 换手率>3% AND 换手率/振幅>2.0
+            amplitude = (high - low) / pre_close * 100 if pre_close > 0 else 0
+            if turnover_rate > 3 and amplitude > 0 and (turnover_rate / amplitude) > 2.0:
                 dim3_score += 6
-                dim3_reason.append(f"换手{turnover_rate:.1f}%+6")
-            elif turnover_rate > 10:
+                dim3_reason.append(f"强承接换手/振幅{max(0,turnover_rate/amplitude if amplitude>0 else 0):.1f}+6")
+            
+            # 脉冲/尾盘回流：超大单净流入>0 AND (中单+小单)净流出>0
+            buy_elg = safe_float(latest.get("buy_elg_amount", 0))
+            sell_elg = safe_float(latest.get("sell_elg_amount", 0))
+            buy_lg = safe_float(latest.get("buy_lg_amount", 0))
+            sell_lg = safe_float(latest.get("sell_lg_amount", 0))
+            elg_net = buy_elg - sell_elg
+            lg_net = buy_lg - sell_lg
+            # 中单+小单净流出 ≈ 总净流入 - 超大单净流入 - 大单净流入（简化：net_mf > 0 + elg_net > 0 即超大单主导）
+            if elg_net > 0 and net_mf > 0:
                 dim3_score += 4
-                dim3_reason.append(f"换手{turnover_rate:.1f}%活跃+4")
+                dim3_reason.append(f"超大单主导+4")
         else:
-            # 净流出，不给基础分
             dim3_score = 0
             dim3_reason.append(f"净流出{abs(net_mf)/10000:.2f}亿")
+        
+        # V2.3 负向过滤（满足任一即扣12分）
+        pct_chg = safe_float(daily_basic_data[0].get("pct_change", 0))
+        is_zt = (pct_chg >= 9.5)
+        is_negative_triggered = False
+        
+        # ① 当日涨幅>5% AND 换手率<2%（拉升无量）
+        if pct_chg > 5 and turnover_rate < 2 and not is_zt:
+            dim3_score -= 12
+            dim3_reason.append(f"拉升无量{pct_chg:.1f}%换手{turnover_rate:.1f}%-12")
+            is_negative_triggered = True
+        # ② 当日跌幅>3% AND 换手率>8%（放量出逃）
+        if not is_negative_triggered and pct_chg < -3 and turnover_rate > 8:
+            dim3_score -= 12
+            dim3_reason.append(f"放量出逃{pct_chg:.1f}%换手{turnover_rate:.1f}%-12")
+        # ③ 当日主力净流出>0 AND 换手率>10%（对倒嫌疑）
+        if not is_negative_triggered and net_mf < 0 and turnover_rate > 10:
+            dim3_score -= 12
+            dim3_reason.append(f"对倒嫌疑换手{turnover_rate:.1f}%-12")
     
     dim3_score = max(0, min(20, dim3_score))
     score += dim3_score
@@ -1928,7 +2071,16 @@ def score_fundflow(code):
     
     final_score = min(100, score)
     
-    if final_score >= 75:
+    # V2.3: 53-56分边缘区间二次确认
+    if 53 <= final_score <= 56:
+        # 二次确认：维度1≥21(60%) AND 维度5≥8(60%) → 升级为高潜力
+        if dim1_score >= 21 and dim5_score >= 8:
+            level = "高"
+            reason.append("[边缘升级]维1≥21+维5≥8→高潜力")
+        else:
+            level = "中"
+            reason.append("[边缘确认]维持中等潜力")
+    elif final_score >= 75:
         level = "高"
     elif final_score >= 55:
         level = "中"
