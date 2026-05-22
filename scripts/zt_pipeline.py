@@ -2382,7 +2382,7 @@ def score_sentiment(code):
         pass
     
     # 1.2 获取全市场涨停数据（T+1）
-    limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
+    limit_fields = ["trade_date", "ts_code", "name", "close", "pct_chg", "limit", "limit_times", "up_stat"]
     limit_data = []
     try:
         resp = call_tushare("limit_list_d", token, {"trade_date": today_str}, ",".join(limit_fields))
@@ -2446,15 +2446,6 @@ def score_sentiment(code):
             if concept_name in k or k in concept_name:
                 return v
         return 0
-    # 补充：用涨停数据按行业统计（备选）
-    if limit_data:
-        for item in limit_data:
-            item_name = item.get('name', '')
-            # 用涨停股所属概念名统计
-            for cpt_name in concept_names:
-                if cpt_name not in concept_ul_cnt:
-                    concept_ul_cnt[cpt_name] = 0
-    
     # 1.7 获取个股昨日成交量（CallVolRatio量纲修正，V1.2）
     yesterday_vol = 0
     try:
@@ -2748,7 +2739,7 @@ def score_sentiment(code):
                 "ts_code": code,
                 "start_date": today_str,
                 "end_date": today_str
-            }, "trade_date,pct_change")
+            }, "trade_date,pct_chg")
             stock_items = resp_stock.get("data", {}).get("items", [])
             if stock_items:
                 stock_pct = safe_float(stock_items[0][1]) or 0
@@ -2759,7 +2750,7 @@ def score_sentiment(code):
     if limit_data:
         for item in limit_data:
             if hasattr(item, 'get') and item.get('ts_code', '') == code:
-                stock_pct = safe_float(item.get('pct_change', 0)) or 0
+                stock_pct = safe_float(item.get('pct_chg', 0)) or 0
                 break
     
     # 判断是否主线题材（用概念涨停数代理：≥3只涨停=主线）
