@@ -2713,6 +2713,9 @@ def score_sentiment(code):
     realtime_cache = _batch_fetch_realtime_pct()
     if code_short in realtime_cache:
         stock_pct = realtime_cache[code_short] or 0
+        # V2.4: 异常值防护(东财API偶发错误值如-192%)
+        if abs(stock_pct) > 30:
+            stock_pct = 0
     
     # V2.4: 缓存未命中时，用个股行情接口单独查
     if stock_pct == 0:
