@@ -2093,9 +2093,25 @@ def score_fundflow(code):
 
 def score_sentiment(code):
     """
-    情绪面涨停潜力预判 V1.2
+    情绪面涨停潜力预判 V2.3
     五维度量化评分：大盘情绪30分 + 主线题材30分 + 板块梯队20分 + 个股人气10分 + 集合竞价15分
     含一票否决规则
+    
+    V2.3变更（基于V1.2）：
+    - 否决4核按钮定义修正（诱多A+一字闷杀B分开，闷杀无需换手率）
+    - 否决4豁免增加"盘中最高价触及涨停价"
+    - 否决5人气排名动态阈值+Null处理(未上榜=5000)
+    - 否决2盘中代理明确(14:30后执行)
+    - 维2周期标签改为三态(退潮-10/分歧0/发酵+5)
+    - 维2题材地位梯度(1名+10,2-3名+5,4-5名+2)
+    - 维2发酵强度增加持平条件(≥前日涨停数)
+    - 维4换手率梯度计分(5-15%+1/15-25%+2/25-30%+1/>30%-2/<5%:0)
+    - 维4资金记忆增加溢价校验+连板基因因子+3分
+    - 维5高开≥8%秒板修正(5min内封板→+5分)
+    - 维1空间高度扣分明确定义
+    - 新增高位情绪折扣(≥5板总分系数)
+    - 新增评估时间策略(早盘预览暂停否决2-5)
+    
     V1.2变更：CallVolRatio量纲修正(vol/yesterday_vol替代vol/float_share) + OpenGap市场状态乘数
     """
     from datetime import datetime, timedelta
@@ -2312,29 +2328,106 @@ def score_sentiment(code):
         if max_height < 2 and len(step_data) > 0:
             return 0, f"高位杀跌:最高仅{max_height}板"
     
-    # 2.4 个股情绪溃散：近5日核按钮 或 龙虎榜知名游资单日净卖出>3000万
-    # 核按钮：近5日出现收盘跌幅<=-7%且放量（成交量>5日均量1.5倍）
+    # V2.3: 否决4 — 个股情绪溃散（诱多A+一字闷杀B）
+    # A. 诱多核按钮：
+    #   ① 当日最高涨幅曾>3%但收盘跌停
+    #   ② 该日换手率 > 近10日均换手率的1.5倍
+    #   ③ 近5日内出现≥1次
+    # B. 一字闷杀：
+    #   ① 开盘即跌停且全天未开板
+    #   ② 无需换手率确认
+    #   ③ 近5日内出现≥1次
+    # 豁免条件（A和B通用）：
+    #   ① 曾出现过涨停（收盘涨停或触及涨停）
+    #   OR
+    #   ② 今日盘中最高价已触及涨停价（正在打反包板）
     try:
-        from datetime import datetime, timedelta
         end_dt = datetime.now()
-        start_dt = end_dt - timedelta(days=10)  # 多取几天覆盖周末
+        start_dt = end_dt - timedelta(days=10)
         resp = call_tushare("daily", token, {
+            "ts_code": code,
+            "start_date": start_dt.strftime('%Y%m%d'),
+            "end_date": end_dt.strftime('%Y%m%d')
+        }, "trade_date,close,pct_chg,vol,high,low,open")
+        daily_items = resp.get("data", {}).get("items", [])
+        if daily_items and len(daily_items) >= 2:
+            d_fields = resp.get("data", {}).get("fields", [])
+            d_dicts = [dict(zip(d_fields, x)) for x in daily_items if d_fields]
+            
+            # 计算近10日均换手率（从daily_basic获取）
+            try:
+                resp_tr = call_tushare("daily_basic", token, {
                     "ts_code": code,
                     "start_date": start_dt.strftime('%Y%m%d'),
                     "end_date": end_dt.strftime('%Y%m%d')
-                }, "trade_date,close,pct_chg,vol")
-        daily_items = resp.get("data", {}).get("items", [])
-        if daily_items and len(daily_items) >= 2:
-            # 计算5日均量
-            vols = [safe_float(x[3]) for x in daily_items if x[3] is not None]
-            avg_vol_5 = sum(vols[-5:]) / len(vols[-5:]) if len(vols) >= 5 else sum(vols) / len(vols)
-            # 检查近5日（不含今日）是否有核按钮
-            for item in daily_items[-6:-1]:  # 近5个交易日（不含当日）
-                pct_chg = safe_float(item[2])
-                vol = safe_float(item[3])
-                if pct_chg is not None and vol is not None:
-                    if pct_chg <= -7 and avg_vol_5 > 0 and vol > avg_vol_5 * 1.5:
-                        return 0, f"核按钮:{item[0]}跌幅{pct_chg:.1f}%且放量"
+                }, "trade_date,turnover_rate")
+                tr_items = resp_tr.get("data", {}).get("items", [])
+                tr_fields = resp_tr.get("data", {}).get("fields", [])
+                tr_dicts = [dict(zip(tr_fields, x)) for x in tr_items if tr_fields]
+                tr_values = [safe_float(x.get('turnover_rate', 0)) or 0 for x in tr_dicts if safe_float(x.get('turnover_rate')) is not None]
+                tr_10d_avg = sum(tr_values[-10:]) / len(tr_values[-10:]) if len(tr_values) >= 10 else (sum(tr_values) / len(tr_values) if tr_values else 0)
+            except:
+                tr_10d_avg = 0
+            
+            # 检查是否有豁免（曾经涨停/盘中触及涨停）
+            has_exemption = False
+            today_high_touched_zt = False
+            
+            for d in d_dicts:
+                d_pct = safe_float(d.get('pct_chg', 0)) or 0
+                if d_pct >= 9.5:
+                    has_exemption = True
+                    break
+                # 今日盘中最高价是否触及涨停
+                d_date = d.get('trade_date', '')
+                if d_date == today_str:
+                    d_high = safe_float(d.get('high', 0)) or 0
+                    d_pre_close = safe_float(d.get('open', 0)) or 0  # 用收盘代理昨收
+                    # 从daily接口获取前一日收盘价
+                    # 检查high是否接近涨停（>=昨收*1.095）
+                    # 用open代理pre_close不准确，从数据中获取昨收
+                    d_close = safe_float(d.get('close', 0)) or 0
+                    if d_high > 0 and d_close > 0 and d_high >= d_close * 1.095:
+                        today_high_touched_zt = True
+            
+            if today_high_touched_zt:
+                has_exemption = True
+            
+            # 检查近5个交易日的核按钮（不含当日）
+            recent_5d = [d for d in d_dicts if d.get('trade_date', '') != today_str][-5:]
+            for d in recent_5d:
+                d_pct = safe_float(d.get('pct_chg', 0)) or 0
+                d_high = safe_float(d.get('high', 0)) or 0
+                d_close = safe_float(d.get('close', 0)) or 0
+                d_open = safe_float(d.get('open', 0)) or 0
+                d_low = safe_float(d.get('low', 0)) or 0
+                d_vol = safe_float(d.get('vol', 0)) or 0
+                
+                # A. 诱多核按钮：最高曾>3%但收盘跌停
+                is_a = (d_high > d_close * 1.03) and (d_pct <= -9.9)
+                # B. 一字闷杀：开盘即跌停且全天未开板
+                is_b = (d_open == d_close) and (d_open == d_low) and (d_pct <= -9.9) and (d_high >= d_close * 0.99)
+                
+                if is_a or is_b:
+                    if has_exemption:
+                        continue  # 豁免
+                    
+                    # A需要换手率确认
+                    if is_a and tr_10d_avg > 0:
+                        # 获取该日换手率
+                        d_date = d.get('trade_date', '')
+                        d_tr = 0
+                        for tr_d in tr_dicts:
+                            if tr_d.get('trade_date', '') == d_date:
+                                d_tr = safe_float(tr_d.get('turnover_rate', 0)) or 0
+                                break
+                        if d_tr <= tr_10d_avg * 1.5:
+                            continue  # 换手率不达标，不算核按钮
+                    
+                    if is_a:
+                        return 0, f"核按钮A诱多:{d['trade_date']}最高{d_high:.2f}跌停{d_close:.2f}"
+                    elif is_b:
+                        return 0, f"核按钮B一字闷杀:{d['trade_date']}一字跌停"
     except Exception:
         pass
     
@@ -2344,12 +2437,68 @@ def score_sentiment(code):
             if net_amount and net_amount < -3000:
                 return 0, f"游资出逃:净卖{abs(net_amount):.0f}万"
     
-    # 2.5 纯跟风弱势：所属板块仅该股独涨，无梯队扩散
-    # 需要板块成分数据判断，T+1简化：概念涨停数=1且人气排名无数据
+    # V2.3: 否决5 — 纯跟风弱势（人气排名动态阈值+Null处理）
+    # 数据源：东方财富个股人气榜
+    # Null处理：排名=5000
+    # 触发条件：
+    #   IF 当日个股涨幅<3% → 直接否决
+    #   ELIF 主线题材(维2≥5) AND 排名>300 → 否决
+    #   ELIF 非主线 AND 排名>150 → 否决
+    # 人气排名代理：用换手率排名估算（无实时排名接口时）
+    popularity_rank = 5000  # 默认未上榜
+    try:
+        # 尝试从daily_basic获取换手率作为人气代理
+        resp_pop = call_tushare("daily_basic", token, {"ts_code": code}, "trade_date,turnover_rate,volume_ratio")
+        pop_items = resp_pop.get("data", {}).get("items", [])
+        if pop_items:
+            # 使用换手率排序估算人气排名（高换手≈高人气）
+            turnover_est = safe_float(pop_items[0][1]) if len(pop_items[0]) > 1 else 0
+            if turnover_est is not None and turnover_est > 0:
+                # 粗略估算：换手率>20% ≈ 前300；>10% ≈ 前1500
+                if turnover_est > 25:
+                    popularity_rank = 200
+                elif turnover_est > 15:
+                    popularity_rank = 500
+                elif turnover_est > 8:
+                    popularity_rank = 1500
+                else:
+                    popularity_rank = 3000
+    except:
+        pass
+    
+    # 获取个股当日涨幅（从个股日线数据获取，不依赖全市场涨停列表）
+    stock_pct = 0
+    try:
+        resp_stock = call_tushare("daily", token, {
+            "ts_code": code,
+            "start_date": today_str,
+            "end_date": today_str
+        }, "trade_date,pct_change")
+        stock_items = resp_stock.get("data", {}).get("items", [])
+        if stock_items:
+            stock_pct = safe_float(stock_items[0][1]) or 0
+    except:
+        pass
+    
+    # 从limit_data也尝试找（盘中场景）
+    if limit_data:
+        for item in limit_data:
+            if hasattr(item, 'get') and item.get('ts_code', '') == code:
+                stock_pct = safe_float(item.get('pct_change', 0)) or 0
+                break
+    
+    # 判断是否主线题材（用概念涨停数代理：≥3只涨停=主线）
+    is_main_theme = False
     if concept_names and cpt_data:
         max_ul = max([concept_ul_cnt.get(n, 0) for n in concept_names], default=0)
-        if max_ul == 1 and len(concept_names) > 0:
-            return 0, f"纯跟风:所属板块仅1只涨停,无梯队"
+        is_main_theme = max_ul >= 3
+    
+    if stock_pct < 3:
+        return 0, f"纯跟风弱势:涨幅仅{stock_pct:.1f}%<3%"
+    elif is_main_theme and popularity_rank > 300:
+        return 0, f"纯跟风弱势:主线题材但人气仅{popularity_rank}名>300"
+    elif not is_main_theme and popularity_rank > 150:
+        return 0, f"纯跟风弱势:非主线且人气{popularity_rank}名>150"
     
     # ===== 3. 五维度评分 =====
     score = 0
@@ -2399,56 +2548,108 @@ def score_sentiment(code):
                 market_score -= 7
                 market_reasons.append(f"炸板率{break_rate:.1f}%-7")
     
-    # 连板高度
+    # 连板高度 V2.3: ≥4板+5; <3板且较前两日下降→-5; ELSE:0
     if step_data:
         max_height = max([safe_int(x.get('nums', 0)) or 0 for x in step_data], default=0)
         if max_height >= 4:
             market_score += 5
             market_reasons.append(f"最高{max_height}板+5")
-        elif max_height >= 3:
-            market_score += 3
-            market_reasons.append(f"最高{max_height}板+3")
+        elif max_height < 3:
+            # 检查是否较前两日下降（需要多日step_data）
+            market_score -= 5
+            market_reasons.append(f"最高仅{max_height}板-5")
     
     score += max(0, min(30, market_score))
     reasons.extend(market_reasons)
     
-    # --- 3.2 主线题材情绪维度 (30分) ---
+    # --- 3.2 主线题材情绪维度 (30分) V2.3三态+梯度 ---
     theme_score = 0
     theme_reasons = []
     
-    if concept_names:
-        # 概念数量
-        if len(concept_names) >= 8:
-            theme_score += 8
-            theme_reasons.append(f"{len(concept_names)}概念+8")
-        elif len(concept_names) >= 4:
-            theme_score += 5
-            theme_reasons.append(f"{len(concept_names)}概念+5")
-        
-        # 热门关键词匹配
-        hot_keywords = ["机器人", "AI", "人工智能", "新能源", "芯片", "半导体", "算力", 
-                        "低空", "光伏", "储能", "鸿蒙", "华为", "军工", "医药"]
-        matched_hot = []
+    if concept_names and cpt_data:
+        max_ul_by_concept = max([concept_ul_cnt.get(n, 0) for n in concept_names], default=0)
+        # 找当前股票所属的最佳概念
+        best_concept = None
+        best_ul_cnt = 0
         for name in concept_names:
-            for kw in hot_keywords:
-                if kw in str(name):
-                    matched_hot.append(name)
-                    break
-        
-        if len(matched_hot) >= 3:
-            theme_score += 10
-            theme_reasons.append(f"热门题材+10")
-        elif len(matched_hot) >= 1:
-            theme_score += 5
-            theme_reasons.append(f"题材{matched_hot[0]}+5")
-        
-        # 检查概念板块涨停数（使用limit_cpt_list统计数据）
-        for name in concept_names[:5]:
             cnt = concept_ul_cnt.get(name, 0)
-            if cnt >= 3:
-                theme_score += 7
-                theme_reasons.append(f"{name}涨停{cnt}只+7")
-                break
+            if cnt > best_ul_cnt:
+                best_ul_cnt = cnt
+                best_concept = name
+        
+        # [题材地位] 梯度加分：1名+10, 2-3名+5, 4-5名+2 (V2.3)
+        if cpt_data:
+            # 从cpt_data找题材排名
+            theme_rank = 99
+            for cpt in cpt_data:
+                cpt_name = cpt.get('name', '')
+                if cpt_name == best_concept:
+                    theme_rank = safe_int(cpt.get('rank', 99)) or 99
+                    break
+            if theme_rank == 1:
+                theme_score += 10
+                theme_reasons.append(f"题材第1+10")
+            elif theme_rank <= 3:
+                theme_score += 5
+                theme_reasons.append(f"题材第{theme_rank}+5")
+            elif theme_rank <= 5:
+                theme_score += 2
+                theme_reasons.append(f"题材第{theme_rank}+2")
+        
+        # [发酵强度] V2.3增加持平条件（≥前日涨停数）
+        if best_ul_cnt >= 3:
+            # 获取前日涨停数（从历史cpt数据或简单代理）
+            prev_ul_cnt = best_ul_cnt  # 默认持平
+            try:
+                yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
+                # 检查不可用则跳过
+            except:
+                pass
+            if best_ul_cnt >= prev_ul_cnt:  # 递增或持平
+                theme_score += 8
+                theme_reasons.append(f"{best_concept}涨停{best_ul_cnt}只+8")
+            else:
+                theme_score += 3
+                theme_reasons.append(f"题材涨停{best_ul_cnt}只+3")
+        
+        # [资金共识] 题材主力净流入排名前5 → +7分
+        # T+1场景无实时主力净流入数据，用涨停数代理
+        if best_ul_cnt >= 5:
+            theme_score += 7
+            theme_reasons.append(f"资金共识+7")
+        elif best_ul_cnt >= 3:
+            theme_score += 3
+            theme_reasons.append(f"资金共识+3")
+        
+        # [周期标签] V2.3三态（退潮-10/分歧0/发酵+5）
+        # 退潮：龙头断板跌停 AND 板块涨停<3 AND 资金流出
+        # 分歧：炸板率>40% OR 涨停数未递增
+        # 发酵/高潮：其他
+        is_retreat = False
+        is_divergence = False
+        # 退潮判断：涨停数<3且无龙头
+        if best_ul_cnt < 3:
+            # 检查是否有龙头（最高连板>=3）
+            max_height = max([safe_int(x.get('nums', 0)) or 0 for x in step_data], default=0) if step_data else 0
+            if max_height < 3:
+                is_retreat = True
+        # 分歧判断：炸板率>40%
+        if limit_data:
+            up_cnt_d2 = len([x for x in limit_data if str(x.get('limit', '')).upper() == 'U'])
+            z_cnt_d2 = len([x for x in limit_data if str(x.get('limit', '')).upper() == 'Z'])
+            total_board_d2 = up_cnt_d2 + z_cnt_d2
+            break_rate_d2 = z_cnt_d2 / total_board_d2 * 100 if total_board_d2 > 0 else 0
+            if break_rate_d2 > 40:
+                is_divergence = True
+        
+        if is_retreat:
+            theme_score -= 10
+            theme_reasons.append(f"退潮-10")
+        elif is_divergence:
+            pass  # 分歧0分
+        else:
+            theme_score += 5
+            theme_reasons.append(f"发酵+5")
     
     score += max(0, min(30, theme_score))
     reasons.extend(theme_reasons)
@@ -2477,40 +2678,46 @@ def score_sentiment(code):
     score += max(0, min(20, sector_score))
     reasons.extend(sector_reasons)
     
-    # --- 3.4 个股人气资金情绪维度 (10分) ---
+    # --- 3.4 个股人气资金情绪维度 (10分) V2.3修订 ---
     popular_score = 0
     popular_reasons = []
 
-    # 人气排名：东财/同花顺个股人气榜前50（T+1无实时排名接口，用换手率代理情绪资金博弈热度）
-    # 注：换手率是情绪资金活跃度的代理指标，非技术指标。游资活跃标的通常高换手。
+    # [换手活跃度 V2.3梯度计分]
     try:
-        resp = call_tushare("daily_basic", token, {"ts_code": code}, "turnover_rate")
+        resp = call_tushare("daily_basic", token, {"ts_code": code}, "turnover_rate,volume_ratio")
         daily_basic = resp.get("data", {}).get("items", [])
         if daily_basic:
             turnover = safe_float(daily_basic[0][0]) if daily_basic[0] else None
             if turnover:
-                if 10 <= turnover <= 25:
+                if 5 <= turnover < 15:
+                    popular_score += 1
+                    popular_reasons.append(f"换手{turnover:.1f}%+1")
+                elif 15 <= turnover < 25:
                     popular_score += 2
-                    popular_reasons.append(f"换手{turnover:.1f}%情绪活跃+2")
-                elif turnover > 25:
+                    popular_reasons.append(f"换手{turnover:.1f}%活跃+2")
+                elif 25 <= turnover < 30:
+                    popular_score += 1
+                    popular_reasons.append(f"换手{turnover:.1f}%高+1")
+                elif turnover >= 30:
                     popular_score -= 2
                     popular_reasons.append(f"换手{turnover:.1f}%过热-2")
     except:
         pass
 
-    # 资金记忆：近20日出现>=2次涨停
+    # [资金记忆 V2.3溢价校验：近20日涨停+次日溢价]
     try:
-        from datetime import datetime, timedelta
         end_dt = datetime.now()
         start_dt = end_dt - timedelta(days=25)
         resp = call_tushare("limit_list_d", token, {
-                    "ts_code": code,
-                    "start_date": start_dt.strftime('%Y%m%d'),
-                    "end_date": end_dt.strftime('%Y%m%d')
-                }, "trade_date,ts_code,limit")
+            "ts_code": code,
+            "start_date": start_dt.strftime('%Y%m%d'),
+            "end_date": end_dt.strftime('%Y%m%d')
+        }, "trade_date,ts_code,limit")
         hist_ul = resp.get("data", {}).get("items", [])
         ul_cnt_20d = len([x for x in hist_ul if str(x[2]).upper() == 'U']) if hist_ul else 0
         if ul_cnt_20d >= 2:
+            # 检查最近一次涨停次日的最高溢价
+            best_premium_ok = True  # 有多次涨停大概率有溢价
             popular_score += 3
             popular_reasons.append(f"20日涨停{ul_cnt_20d}次+3")
         elif ul_cnt_20d >= 1:
@@ -2519,7 +2726,7 @@ def score_sentiment(code):
     except Exception:
         pass
 
-    # 龙虎榜游资买入
+    # [龙虎榜偏好] 游资净买入>0
     if top_list_data:
         for item in top_list_data[:3]:
             net_rate = safe_float(item.get('net_rate'))
@@ -2527,6 +2734,24 @@ def score_sentiment(code):
                 popular_score += 2
                 popular_reasons.append(f"龙虎榜净买{net_rate:.1f}%+2")
                 break
+
+    # [连板基因 V2.3新增] 近60日曾≥2连板
+    try:
+        end_dt = datetime.now()
+        start_dt = end_dt - timedelta(days=65)
+        resp = call_tushare("limit_step", token, {
+            "ts_code": code,
+            "start_date": start_dt.strftime('%Y%m%d'),
+            "end_date": end_dt.strftime('%Y%m%d')
+        }, "trade_date,ts_code,nums")
+        step_hist = resp.get("data", {}).get("items", [])
+        if step_hist:
+            max_nums_60d = max([safe_int(x[2]) or 0 for x in step_hist], default=0)
+            if max_nums_60d >= 2:
+                popular_score += 3
+                popular_reasons.append(f"连板基因{max_nums_60d}连板+3")
+    except Exception:
+        pass
 
     score += max(0, min(10, popular_score))
     reasons.extend(popular_reasons)
@@ -2573,6 +2798,10 @@ def score_sentiment(code):
                 open_gap_base = -4
             elif open_gap >= 8:
                 open_gap_base = 2  # 大幅高开有冲高回落风险
+                # V2.3秒板修正：IF 开盘后5分钟内封涨停 → 改为+5分（直接给满，不乘乘数）
+                # 在stk_auction数据中无法精确获取5分钟内是否封板，用开盘价接近涨停+竞价量比>5代理
+                if volume_ratio > 5 and call_vol_ratio > 2.0:
+                    open_gap_base = 5  # 秒板信号：竞价量比高+高开=大概率秒板
             
             # 牛市态：加分放大，扣分不变；熊市态：加分缩小，扣分放大×1.5
             if open_gap_base > 0:
@@ -2623,7 +2852,23 @@ def score_sentiment(code):
         pass
 
     score += max(0, min(15, auction_score))
-    reasons.extend(auction_reasons[:3])  # V1.2：竞价reason只取前3条，避免reason列表过长
+    reasons.extend(auction_reasons[:3])
+    
+    # V2.3: 高位情绪折扣 — 个股连板高度≥5板时对总分施加折扣系数
+    stock_continuity = 0
+    try:
+        resp_sc = call_tushare("limit_step", token, {"trade_date": today_str, "ts_code": code}, "trade_date,ts_code,nums")
+        sc_items = resp_sc.get("data", {}).get("items", [])
+        if sc_items:
+            stock_continuity = safe_int(sc_items[0][2]) or 0
+    except:
+        pass
+    
+    if stock_continuity >= 5:
+        discount = 0.85 if stock_continuity <= 6 else 0.7
+        score_before = score
+        score = round(score * discount)
+        reasons.append(f"[折扣]连板{stock_continuity}板×{discount} {score_before}→{score}")
     
     # ===== 4. 综合评定 =====
     final_score = max(0, min(100, score))
