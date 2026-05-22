@@ -26,14 +26,7 @@ logger = logging.getLogger("feishu_bot")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🟢 Feishu Bot 服务启动")
-    try:
-        from scripts import proxy_utils
-        if proxy_utils.is_proxy_enabled():
-            addr = proxy_utils.get_proxy_ip()
-            if addr:
-                logger.info(f"代理已预热: {addr}")
-    except Exception as e:
-        logger.warning(f"代理预热异常: {e}")
+    # 代理预热跳过（盘后代理不稳定），首次请求时惰性加载
     yield
     logger.info("🔴 Feishu Bot 服务停止")
 
