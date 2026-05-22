@@ -97,7 +97,7 @@ def clean_mention(text: str) -> str:
 
 
 def _score_one_stock(code: str) -> dict:
-    """对单只股票运行四维度评分"""
+    """对单只股票运行五维度评分"""
     from zt_pipeline import (
         score_fundamental,
         score_technical,
@@ -105,6 +105,7 @@ def _score_one_stock(code: str) -> dict:
         score_sentiment,
         AGENT_WEIGHTS,
     )
+    from score_shortterm import score_shortterm
 
     scores: dict[str, float] = {}
     reasons: dict[str, str] = {}
@@ -113,6 +114,7 @@ def _score_one_stock(code: str) -> dict:
         "technical": score_technical,
         "fundflow": score_fundflow,
         "sentiment": score_sentiment,
+        "shortterm": score_shortterm,
     }
     with ThreadPoolExecutor(max_workers=4) as pool:
         futures = {pool.submit(fn, code): dim for dim, fn in funcs.items()}
