@@ -2355,7 +2355,7 @@ def _batch_fetch_realtime_pct():
                 "https://push2.eastmoney.com/api/qt/clist/get?"
                 "np=1&fltt=2&invt=2&"
                 "fs=m:0+t:6+f:!2,m:0+t:80+f:!2,m:1+t:2+f:!2,m:1+t:23+f:!2,m:0+t:81+s:262144+f:!2&"
-                f"fields=f12,f3&fid=f3&pn={page}&pz=100&po=0&dect=1&"
+                f"fields=f12,f3&fid=f3&pn={page}&pz=100&po=1&dect=1&"
                 "ut=fa5fd1943c7b386f172d6893dbfba10b"
             )
             resp = _req.get(url, proxies=proxies, timeout=10)
