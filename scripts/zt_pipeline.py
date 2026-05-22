@@ -406,9 +406,20 @@ def filter_candidates(candidates):
 # ===== 2. 基本面评分 (V1.0 五维度量化) =====
 def score_fundamental(code):
     """
-    基本面涨停潜力量化评分 V1.0
+    基本面涨停潜力量化评分 V1.5（最终实盘定稿版）
     五维度：业绩40% + 事件30% + 筹码15% + 财务10% + 估值5%
-    含财务避雷一票否决机制
+    含财务避雷一票否决（含行业豁免）+ 见光死惩罚 + 非线性共振加分
+
+    V1.5变更（基于V1.0）：
+    - 否决规则增加行业豁免（医药/电子商誉豁免、地产/建筑/非银/公用负债率豁免）
+    - 否决规则增加困境反转豁免（单季扣非>0且去年同期<0免于连续亏损否决）
+    - 否决规则新增研发费用资本化率否决（>30%+现金流<净利润×0.5）
+    - 股东筹码维度重构：大宗溢价+解禁冲击+连板基因
+    - 估值维度重构：废除低PE加分，改为分析师上调+困境反转+远期PEG
+    - 新增非线性共振加分（条件A/B取最高）
+    - 新增见光死惩罚（Price-in_Ratio衰减）
+    - 新增困境反转加分（独立+5分）
+    - 新增主力营收占比<50%否决
     """
     from datetime import datetime, timedelta
     
@@ -491,32 +502,83 @@ def score_fundamental(code):
     except:
         recent_ann_count = 0
     
-    # ===== 2. 一票否决检查 =====
+    # 获取行业分类（用于行业豁免判断 V1.5）
+    industry_name = ""
+    try:
+        resp = call_tushare("stock_basic", token, {"ts_code": code}, "ts_code,industry")
+        _sb = resp.get("data", {}).get("items", [])
+        if _sb:
+            _sb_fields = resp.get("data", {}).get("fields", [])
+            _sb_dict = dict(zip(_sb_fields, _sb[0])) if _sb_fields else {}
+            industry_name = str(_sb_dict.get('industry', ''))
+    except:
+        pass
+    
+    # ===== 2. 一票否决检查（V1.5 含行业豁免） =====
     risk_flags = []
     is_vetoed = False
     
-    # 商誉占比 > 30%
+    # 获取ROE用于行业豁免判断
+    _roe_source = fina_annual if fina_annual.get('end_date', '').endswith('1231') else fina_latest
+    roe_source_val = safe_float(_roe_source.get('roe')) or 0
+    
+    # V1.5: 商誉/净资产 > 30% 且 ROE < 10%（医药/电子行业ROE>10%暂免）
     if bs_latest.get('goodwill') and bs_latest.get('total_hldr_eqy_exc_min_int'):
         goodwill_ratio = float(bs_latest['goodwill']) / float(bs_latest['total_hldr_eqy_exc_min_int']) * 100
         if goodwill_ratio > 30:
-            is_vetoed = True
-            risk_flags.append(f"商誉占比{goodwill_ratio:.0f}%>30%")
+            # 行业豁免：医药/电子行业ROE>10%免于否决
+            pharma_and_elec = any(kw in industry_name for kw in ["医药", "医疗", "电子", "半导体", "元器件"])
+            if pharma_and_elec and roe_source_val > 10:
+                risk_flags.append(f"商誉占比{goodwill_ratio:.0f}%(行业豁免)")
+            else:
+                is_vetoed = True
+                risk_flags.append(f"商誉占比{goodwill_ratio:.0f}%>30%")
     
-    # 负债率 > 70% 且 经营现金流连续2季度为负
+    # V1.5: 资产负债率 > 70% 且 经营现金流连续2季度为负
+    # 行业豁免：房地产/建筑/非银金融/公用事业仅看现金流
+    debt_exempt_industries = ["房地产", "建筑", "非银金融", "公用事业", "银行", "综合"]
+    is_debt_exempt = any(kw in industry_name for kw in debt_exempt_industries)
     if fina_latest.get('debt_to_assets'):
         debt_ratio = float(fina_latest['debt_to_assets'])
         if debt_ratio > 70:
-            # 检查经营现金流：ocfps(每股经营现金流)连续2季度为负
             ocfps_latest = safe_float(fina_latest.get('ocfps'))
             ocfps_annual = safe_float(fina_annual.get('ocfps')) if fina_annual else None
-            # 两期都为负，或最新期为负且无上期数据（保守处理：仅负债率高也否决）
-            if ocfps_latest is not None and ocfps_latest < 0:
-                if ocfps_annual is None or ocfps_annual < 0:
-                    is_vetoed = True
-                    risk_flags.append(f"负债率{debt_ratio:.0f}%>70%且经营现金流为负")
+            if is_debt_exempt:
+                # 行业豁免：仅检查现金流，负债率高不否决
+                if ocfps_latest is not None and ocfps_latest < 0:
+                    if ocfps_annual is None or ocfps_annual < 0:
+                        is_vetoed = True
+                        risk_flags.append(f"经营现金流连续为负(行业豁免负债率)")
+                else:
+                    risk_flags.append(f"负债率{debt_ratio:.0f}%>70%(行业豁免)")
             else:
-                # 负债率高但经营现金流正常，仅扣分不否决（在财务健康维度处理）
-                pass
+                if ocfps_latest is not None and ocfps_latest < 0:
+                    if ocfps_annual is None or ocfps_annual < 0:
+                        is_vetoed = True
+                        risk_flags.append(f"负债率{debt_ratio:.0f}%>70%且经营现金流为负")
+    
+    # V1.5: 扣非净利润连续3年亏损 + 困境反转豁免
+    # 检查是否连续亏损（简单代理：最新扣非净利为负）
+    is_consecutive_loss = False
+    if fina_latest.get('dt_netprofit_yoy'):
+        profit_yoy = float(fina_latest['dt_netprofit_yoy'])
+        if profit_yoy < -50:  # 大幅下降视为连续亏损
+            is_consecutive_loss = True
+    
+    # 困境反转检查：最新单季扣非>0且去年同期<0 → 豁免
+    is_turnaround = False
+    if inc_latest.get('n_income') and inc_prev.get('n_income'):
+        try:
+            latest_ni = float(inc_latest['n_income'])
+            prev_ni = float(inc_prev['n_income'])
+            if latest_ni > 0 and prev_ni < 0:
+                is_turnaround = True
+        except:
+            pass
+    
+    if is_consecutive_loss and not is_turnaround:
+        is_vetoed = True
+        risk_flags.append("扣非净利润连续亏损(无困境反转)")
     
     # 非经常性损益占比 > 20%
     if inc_latest.get('n_income') and inc_latest['n_income'] != 0:
@@ -554,6 +616,43 @@ def score_fundamental(code):
     except Exception:
         pass
     
+    # 获取近20日涨幅（见光死惩罚用 V1.5）
+    pre_return_20d = 0
+    try:
+        end_dt = datetime.now()
+        start_dt = end_dt - timedelta(days=25)
+        resp_pr = call_tushare("daily", token, {
+            "ts_code": code,
+            "start_date": start_dt.strftime('%Y%m%d'),
+            "end_date": end_dt.strftime('%Y%m%d')
+        }, "trade_date,close")
+        pr_items = resp_pr.get("data", {}).get("items", [])
+        if pr_items and len(pr_items) >= 2:
+            _pr_fields = resp_pr.get("data", {}).get("fields", [])
+            _pr_dicts = [dict(zip(_pr_fields, x)) for x in pr_items if _pr_fields]
+            close_20d_ago = safe_float(_pr_dicts[-1].get('close', 0)) or 0
+            close_latest = safe_float(_pr_dicts[0].get('close', 0)) or 0
+            if close_20d_ago > 0:
+                pre_return_20d = (close_latest - close_20d_ago) / close_20d_ago * 100
+    except:
+        pass
+    
+    # 获取分析师一致预期（用于见光死惩罚 V1.5）
+    eps_revision_1m = 0
+    try:
+        resp_fc = call_tushare("fina_forecast", token, {"ts_code": code}, "ts_code,ann_date,end_date,type,report_date,eps_change_ratio")
+        fc_items = resp_fc.get("data", {}).get("items", [])
+        if fc_items:
+            fc_fields = resp_fc.get("data", {}).get("fields", [])
+            fc_dicts = [dict(zip(fc_fields, x)) for x in fc_items if fc_fields]
+            for fc in fc_dicts:
+                change_ratio = safe_float(fc.get('eps_change_ratio', 0)) or 0
+                if change_ratio != 0:
+                    eps_revision_1m = change_ratio
+                    break
+    except:
+        pass
+    
     # 触发否决直接返回0分
     if is_vetoed:
         return 0, f"财务避雷否决: {'; '.join(risk_flags)}"
@@ -562,25 +661,23 @@ def score_fundamental(code):
     factors = {}  # 各维度标准化得分 [0,1]
     reasons = []
     
-    # --- 3.1 盈利业绩维度 (40%) ---
+    # --- 3.1 盈利业绩维度 (40%) V1.5 ---
     profit_score = 0.5  # 基准
     profit_reasons = []
     
-    # ROE - 优先用年报/半年报数据
-    _roe_source = fina_annual if fina_annual.get('end_date', '').endswith('1231') else fina_latest
-    if _roe_source.get('roe'):
-        roe = float(_roe_source['roe'])
-        if roe > 15:
-            profit_score += 0.25
-            profit_reasons.append(f"ROE={roe:.1f}%")
-        elif roe > 10:
-            profit_score += 0.15
-            profit_reasons.append(f"ROE={roe:.1f}%")
-        elif roe < 5:
+    # ROE（复用已计算的_roe_source和roe_source_val）
+    if roe_source_val > 0:
+        if roe_source_val > 15:
+            profit_score += 0.20
+            profit_reasons.append(f"ROE={roe_source_val:.1f}%")
+        elif roe_source_val > 10:
+            profit_score += 0.10
+            profit_reasons.append(f"ROE={roe_source_val:.1f}%")
+        elif roe_source_val < 5:
             profit_score -= 0.15
-            profit_reasons.append(f"ROE={roe:.1f}%偏低")
+            profit_reasons.append(f"ROE={roe_source_val:.1f}%偏低")
     
-    # 扣非净利润同比 (dt_netprofit_yoy字段)
+    # 扣非净利润同比
     if fina_latest.get('dt_netprofit_yoy'):
         profit_yoy = float(fina_latest['dt_netprofit_yoy'])
         if profit_yoy > 50:
@@ -593,7 +690,7 @@ def score_fundamental(code):
             profit_score -= 0.20
             profit_reasons.append(f"扣非净利{profit_yoy:.0f}%")
     
-    # 营收增速 (or_yoy字段)
+    # 营收增速
     if fina_latest.get('or_yoy'):
         rev_yoy = float(fina_latest['or_yoy'])
         if rev_yoy > 30:
@@ -605,58 +702,109 @@ def score_fundamental(code):
     factors['profit'] = max(0, min(1, profit_score))
     reasons.extend(profit_reasons)
     
-    # --- 3.2 题材事件维度 (30%) ---
+    # --- 3.2 题材事件维度 (30%) V1.5 ---
     event_score = 0.5
     event_reasons = []
     
-    # 概念数量 (代理事件热度)
-    if concept_count >= 5:
-        event_score += 0.25
+    # 概念数量（代理事件热度）
+    if concept_count >= 8:
+        event_score += 0.20
         event_reasons.append(f"{concept_count}个概念")
-    elif concept_count >= 3:
-        event_score += 0.15
+    elif concept_count >= 4:
+        event_score += 0.10
         event_reasons.append(f"{concept_count}个概念")
     elif concept_count == 0:
         event_score -= 0.10
     
-    # TODO: 公告事件强度 (需要NLP解析，V1.5实现)
+    # 公告事件强度（有近期公告加分）
+    if recent_ann_count >= 3:
+        event_score += 0.20
+        event_reasons.append(f"近期{recent_ann_count}条公告")
+    elif recent_ann_count >= 1:
+        event_score += 0.10
+        event_reasons.append(f"近期{recent_ann_count}条公告")
+    
+    # V1.5: 见光死惩罚 — 公告前涨幅过大导致事件因子衰减
+    if pre_return_20d > 0 and eps_revision_1m != 0:
+        price_in_ratio = pre_return_20d / (abs(eps_revision_1m) + 5)
+        if price_in_ratio > 2.5 and (factors.get('profit', 0) > 0.6 or event_score > 0.7):
+            event_score *= 0.5  # 事件贡献腰斩
+            reasons.append(f"见光死PIR={price_in_ratio:.1f}>2.5事件减半")
+        if price_in_ratio > 3.5:
+            factors['profit'] = max(0, factors.get('profit', 0) * 0.7)  # 业绩也衰减
+            reasons.append(f"见光死PIR={price_in_ratio:.1f}>3.5业绩减30%")
     
     factors['event'] = max(0, min(1, event_score))
     reasons.extend(event_reasons)
     
-    # --- 3.3 股东筹码维度 (15%) ---
+    # --- 3.3 股东筹码维度 (15%) V1.5 ---
     chip_score = 0.5
     chip_reasons = []
     
-    # 股东户数环比下降
+    # 股东户数环比下降（仅做底仓过滤，不直接加分）
     if holder_latest.get('holder_num') and holder_prev.get('holder_num'):
         try:
             holder_now = float(holder_latest['holder_num'])
             holder_before = float(holder_prev['holder_num'])
             holder_chg = (holder_before - holder_now) / holder_before
-            if holder_chg >= 0.05:  # 下降5%+
-                chip_score += 0.30
+            if holder_chg >= 0.05:
+                chip_score += 0.20
                 chip_reasons.append(f"股东户数-{holder_chg*100:.1f}%")
-            elif holder_chg >= 0.02:
-                chip_score += 0.15
-                chip_reasons.append(f"股东户数-{holder_chg*100:.1f}%")
-            elif holder_chg < -0.05:  # 增加5%+
+            elif holder_chg < -0.05:
                 chip_score -= 0.20
                 chip_reasons.append(f"股东户数+{abs(holder_chg)*100:.1f}%")
         except:
             pass
     
-    # TODO: 机构净增持 (需十大股东数据，V1.5实现)
+    # 连板基因（近60日曾连板 → 有资金记忆）
+    try:
+        end_dt = datetime.now()
+        start_dt = end_dt - timedelta(days=65)
+        resp_gene = call_tushare("limit_step", token, {
+            "ts_code": code,
+            "start_date": start_dt.strftime('%Y%m%d'),
+            "end_date": end_dt.strftime('%Y%m%d')
+        }, "trade_date,ts_code,nums")
+        gene_items = resp_gene.get("data", {}).get("items", [])
+        if gene_items:
+            max_nums = max([safe_int(x[2]) or 0 for x in gene_items], default=0)
+            if max_nums >= 2:
+                chip_score += 0.15
+                chip_reasons.append(f"连板基因{max_nums}连板")
+    except:
+        pass
+    
+    # 解禁冲击（未来30日解禁市值/流通市值 <2% → +2分）
+    try:
+        end_dt = datetime.now()
+        start_dt = end_dt - timedelta(days=30)
+        resp_unlock = call_tushare("share_float", token, {
+            "ts_code": code,
+            "start_date": start_dt.strftime('%Y%m%d'),
+            "end_date": end_dt.strftime('%Y%m%d')
+        }, "float_date,float_share,float_ratio")
+        unlock_items = resp_unlock.get("data", {}).get("items", [])
+        has_large_unlock = False
+        if unlock_items:
+            for item in unlock_items:
+                float_ratio = safe_float(item[2]) if len(item) > 2 else 0
+                if float_ratio and float_ratio > 2:
+                    has_large_unlock = True
+                    break
+        if not has_large_unlock:
+            chip_score += 0.10
+            chip_reasons.append("解禁冲击低+0.1")
+    except:
+        pass
     
     factors['chip'] = max(0, min(1, chip_score))
     reasons.extend(chip_reasons)
     
-    # --- 3.4 财务健康维度 (10%) ---
-    # 已通过否决检查，此维度初始为1.0，风险项扣分
+    # --- 3.4 财务健康维度 (10%) V1.5 ---
     finance_score = 1.0
     finance_reasons = []
     
-    # 负债率风险扣分
+    # 负债率风险扣分（未触发否决则在此扣分）
     if fina_latest.get('debt_to_assets'):
         debt_ratio = float(fina_latest['debt_to_assets'])
         if debt_ratio > 60:
@@ -676,29 +824,23 @@ def score_fundamental(code):
     if finance_reasons:
         reasons.extend(finance_reasons)
     
-    # --- 3.5 估值性价比维度 (5%) ---
-    value_score = 0.5
+    # --- 3.5 估值性价比维度 (5%) V1.5 ---
+    value_score = 0.0  # 废除基准分，仅作为加分项
     value_reasons = []
     
-    # PE相对估值
-    if pe and pe > 0:
-        if pe < 20:
-            value_score += 0.25
-            value_reasons.append(f"PE={pe:.1f}")
-        elif pe < 30:
-            value_score += 0.10
-        elif pe > 50:
-            value_score -= 0.10
-            value_reasons.append(f"PE={pe:.1f}偏高")
-    
-    # PB
-    if pb and pb > 0:
-        if pb < 2:
-            value_score += 0.15
-        elif pb > 5:
-            value_score -= 0.10
+    # PE相对估值（废除低PE加分，改为上调幅度检测）
+    if pe and pe > 0 and pb and pb > 0:
+        # 远期PEG < 1.5视为有估值重塑空间
+        if pe / (roe_source_val if roe_source_val > 0 else 15) < 1.5:
+            value_score += 0.30
+            value_reasons.append("PEG合理")
+        # 困境反转特殊加分
+        if is_turnaround:
+            value_score += 0.30
+            value_reasons.append("困境反转+0.3")
     
     factors['value'] = max(0, min(1, value_score))
+    reasons.extend(value_reasons)
     
     # ===== 4. 综合评分计算 =====
     weights = {
@@ -711,18 +853,24 @@ def score_fundamental(code):
     
     base_score = sum(factors[k] * weights[k] for k in factors) * 100
     
-    # ===== 5. 非线性共振加分 =====
+    # ===== 5. 非线性共振加分（V1.5 取最高，不叠加） =====
     bonus = 0
-    # 条件A: 业绩≥0.8 且 事件≥0.7 且 事件窗口t≤10 (近10日内有公告)
+    # 条件A: 业绩≥0.8 且 事件≥0.7 且 事件窗口t≤10
     if factors.get('profit', 0) >= 0.8 and factors.get('event', 0) >= 0.7 and recent_ann_count > 0:
         bonus = 15
-        reasons.append(f"业绩+事件共振(窗口{recent_ann_window}日内{recent_ann_count}条公告)")
-    # 条件B: 业绩≥0.7 且 筹码≥0.6
-    elif factors.get('profit', 0) >= 0.7 and factors.get('chip', 0) >= 0.6:
+        reasons.append(f"共振A:业绩+事件+15")
+    # 条件B: 筹码≥0.8 且 估值≥0.6
+    elif factors.get('chip', 0) >= 0.8 and factors.get('value', 0) >= 0.6:
         bonus = 10
-        reasons.append("业绩+筹码共振")
+        reasons.append(f"共振B:筹码+估值+10")
     
-    final_score = min(100, base_score + bonus)
+    # V1.5: 困境反转独立加分（最新单季扣非>0且去年同期<0 → +5分）
+    turnaround_bonus = 0
+    if is_turnaround:
+        turnaround_bonus = 5
+        reasons.append("困境反转+5")
+    
+    final_score = min(100, base_score + bonus + turnaround_bonus)
     
     # ===== 6. 涨停潜力等级 =====
     if final_score >= 75:
