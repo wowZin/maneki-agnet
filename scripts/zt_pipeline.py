@@ -1442,9 +1442,14 @@ _FUND_FLOW_DATE = None
 
 def score_fundflow(code):
     """
-    资金面涨停潜力预判 V2.3
-    五维度量化评分：超大单主力35分 + 龙虎榜机构游资25分 + 分时盘口20分 + 融资聪明资金7分 + 筹码抛压13分
+    资金面涨停潜力预判 V2.4
+    五维度量化评分：超大单主力45分 + 龙虎榜机构游资25分 + 分时盘口10分 + 融资聪明资金7分 + 筹码抛压13分
     含一票否决规则（含V2.0市场状态调节器+一字板豁免）
+    
+    V2.4变更（基于V2.3）:
+    - 主力净流入升级为东财f62实时数据(替代T+1 Tushare moneyflow)
+    - 规模阈值因子 15→25(+10, 确定性提升)
+    - 分时盘口因T+1噪音 20→10(-10, 降权)
     
     V2.3变更（基于V2.1）：
     - 否决4增加3日累计豁免：<5%+3日累计净流入≤0才否决，>0转入维度1扣-5分
@@ -1723,8 +1728,8 @@ def score_fundflow(code):
     if rt_amount > 0:
         rt_net_ratio = rt_net_flow / rt_amount * 100
         if rt_net_ratio >= 3:
-            dim1_score += 15
-            dim1_reason.append(f"主力净流入[实时]{rt_net_ratio:.1f}%+15")
+            dim1_score += 25
+            dim1_reason.append(f"主力净流入[实时]{rt_net_ratio:.1f}%+25")
         elif rt_net_ratio < 0.1:
             dim1_score -= 15
             dim1_reason.append(f"主力净流入[实时]{rt_net_ratio:.1f}%-15")
@@ -2009,7 +2014,7 @@ def score_fundflow(code):
             dim3_score -= 12
             dim3_reason.append(f"对倒嫌疑换手{turnover_rate:.1f}%-12")
     
-    dim3_score = max(0, min(20, dim3_score))
+    dim3_score = max(0, min(10, dim3_score))  # V2.4: T+1噪音,上限从20→10
     score += dim3_score
     if dim3_reason:
         reason.append(f"[盘口{dim3_score}分] {' '.join(dim3_reason)}")
