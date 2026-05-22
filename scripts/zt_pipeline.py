@@ -2747,34 +2747,10 @@ def score_sentiment(code):
             if net_amount and net_amount < -3000:
                 return 0, f"游资出逃:净卖{abs(net_amount):.0f}万"
     
-    # V2.3: 否决5 — 纯跟风弱势（人气排名动态阈值+Null处理）
-    # 数据源：东方财富个股人气榜
-    # Null处理：排名=5000
-    # 触发条件：
-    #   IF 当日个股涨幅<3% → 直接否决
-    #   ELIF 主线题材(维2≥5) AND 排名>300 → 否决
-    #   ELIF 非主线 AND 排名>150 → 否决
-    # 人气排名代理：用换手率排名估算（无实时排名接口时）
-    popularity_rank = 5000  # 默认未上榜
-    try:
-        # 尝试从daily_basic获取换手率作为人气代理
-        resp_pop = call_tushare("daily_basic", token, {"ts_code": code}, "trade_date,turnover_rate,volume_ratio")
-        pop_items = resp_pop.get("data", {}).get("items", [])
-        if pop_items:
-            # 使用换手率排序估算人气排名（高换手≈高人气）
-            turnover_est = safe_float(pop_items[0][1]) if len(pop_items[0]) > 1 else 0
-            if turnover_est is not None and turnover_est > 0:
-                # 粗略估算：换手率>20% ≈ 前300；>10% ≈ 前1500
-                if turnover_est > 25:
-                    popularity_rank = 200
-                elif turnover_est > 15:
-                    popularity_rank = 500
-                elif turnover_est > 8:
-                    popularity_rank = 1500
-                else:
-                    popularity_rank = 3000
-    except:
-        pass
+    # V2.3: 否决5 — 纯跟风弱势
+    # 数据源：东方财富个股人气榜（无法获取时，降级为仅检查涨幅）
+    # Null处理：跳过人气排名检查
+    popularity_rank = None  # 无真实人气数据，跳过排名检查
     
     # 获取个股当日涨幅（V2.4: 优先实时缓存 > Tushare日线 > limit_data）
     stock_pct = 0
@@ -2812,9 +2788,9 @@ def score_sentiment(code):
     
     if stock_pct < 3:
         return 0, f"纯跟风弱势:涨幅仅{stock_pct:.1f}%<3%"
-    elif is_main_theme and popularity_rank > 300:
+    elif is_main_theme and popularity_rank is not None and popularity_rank > 300:
         return 0, f"纯跟风弱势:主线题材但人气仅{popularity_rank}名>300"
-    elif not is_main_theme and popularity_rank > 300:
+    elif not is_main_theme and popularity_rank is not None and popularity_rank > 300:
         return 0, f"纯跟风弱势:非主线且人气{popularity_rank}名>300"
     
     # ===== 3. 五维度评分 =====
