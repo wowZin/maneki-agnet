@@ -2554,7 +2554,7 @@ def score_sentiment(code):
             if limit_up_cnt < 15:
                 return 0, f"市场退潮:涨停仅{limit_up_cnt}家"
     
-    # V2.4: 否决6 — 情绪退潮熔断
+    # V2.4: veto6 — emotion circuit breaker
     if limit_data:
         up_cnt = len([x for x in limit_data if str(x.get('limit', '')).upper() == 'U'])
         down_cnt = len([x for x in limit_data if str(x.get('limit', '')).upper() == 'D'])
@@ -3376,6 +3376,7 @@ def main():
     # 排序（双排序输出）
     by_weighted = sorted(results, key=lambda x: x["total"], reverse=True)
     by_top3 = sorted(results, key=lambda x: x.get("top3_score", 0), reverse=True)
+    results = by_weighted  # 保存时用加权排序保证有序
     
     print("\n[排序结果 加权总分]")
     for i, r in enumerate(by_weighted, 1):

@@ -1,0 +1,1428 @@
+[
+  {
+    "code": "002759.SZ",
+    "name": "天际股份",
+    "scores": {
+      "fundamental": 91.0,
+      "technical": 2,
+      "fundflow": 53,
+      "sentiment": 0,
+      "shortterm": 3.5
+    },
+    "reasons": {
+      "fundamental": "[高] 扣非净利+991%; 营收+91%; 近期3条公告; 解禁冲击低+0.1; 共振A:业绩+事件+15",
+      "technical": "[无] 暴量滞涨(换手18.6%)-10; MA60下倾-5; 回踩MA20企稳+3; 板块中性(30%>MA20)+2",
+      "fundflow": "[中] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]5.6%-5 主力占比偏弱[T-1]5.6%-5; [龙虎25分] [盘中]封单5298.1%流通市值+10 [盘中]早封板09:58:27+8 [盘中]秒封/一字板+7; [盘口14分] 持续净流入2.14亿+10 超大单主导+4; [融资4分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2; [锁仓10分] 流入递增锁仓+7 流入加速+3; [边缘确认]维持中等潜力",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 近期无涨停 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 29.78,
+    "resonance": {
+      "count": 1,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002342.SZ",
+    "name": "巨力索具",
+    "scores": {
+      "fundamental": 51.0,
+      "technical": 2,
+      "fundflow": 65,
+      "sentiment": 0,
+      "shortterm": 7.2
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=0.2%偏低; 扣非净利-44%; 8个概念; 近期3条公告; 解禁冲击低+0.1",
+      "technical": "[无] 空头排列-10; MA60下倾-5; 收盘<=MA20-5; 分时走弱(价<中轨)-8; 板块中性(30%>MA20)+2",
+      "fundflow": "[中] [主力35分] 主力净流入[实时]17.99%+15 主力占比[实时]30.5%+10 连续3日净流入+10; [龙虎13分] [盘中]封单1732.0%流通市值+10 [盘中]开板1次+3; [盘口10分] 持续净流入0.65亿+10; [融资4分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2; [锁仓3分] 无抛压+3",
+      "sentiment": "核按钮B一字闷杀:20260518一字跌停",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 28.816000000000003,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002272.SZ",
+    "name": "川润股份",
+    "scores": {
+      "fundamental": 57.0,
+      "technical": 24,
+      "fundflow": 44,
+      "sentiment": 0,
+      "shortterm": 19.8
+    },
+    "reasons": {
+      "fundamental": "[中] 扣非净利-31%; 9个概念; 近期1条公告; 股东户数-8.0%; 解禁冲击低+0.1",
+      "technical": "[无] 多头排列+15; 回踩MA10企稳+5; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "[低] [主力25分] 主力净流入[实时]23.27%+15 主力占比[实时]77.2%+10; [龙虎17分] [盘中]封单5515.3%流通市值+10 [盘中]秒封/一字板+7; [盘口0分] 净流出0.28亿 对倒嫌疑换手38.4%-12; [融资2分] [盘中]融资买入占比100.0%+2",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 3连板+40; 近月4次涨停+10; 近5日活跃(均涨3.5%)+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 28.644,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "600578.SH",
+    "name": "京能电力",
+    "scores": {
+      "fundamental": 53.0,
+      "technical": 29,
+      "fundflow": 39,
+      "sentiment": 0,
+      "shortterm": 19.8
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=3.8%偏低; 11个概念; 近期4条公告; 股东户数+15.5%; 解禁冲击低+0.1",
+      "technical": "[无] 换手8.2%健康+5; 多头排列+15; 回踩MA10企稳+5; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "[低] [主力0分] 主力净流入[T-1]0.00%-15 否决4豁免(3日累计>0)-5; [龙虎11分] [盘中]封单33.7%流通市值+10 [盘中]早封板10:26:08+8 [盘中]开板92次-7; [盘口14分] 持续净流入5.20亿+10 超大单主导+4; [融资4分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2; [锁仓10分] 流入递增锁仓+7 流入加速+3",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近月5次涨停+20; 断板反包+15; 近5日活跃(均涨5.4%)+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 26.983999999999998,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002407.SZ",
+    "name": "多氟多",
+    "scores": {
+      "fundamental": 75.0,
+      "technical": 24,
+      "fundflow": 31,
+      "sentiment": 0,
+      "shortterm": 17.2
+    },
+    "reasons": {
+      "fundamental": "[高] ROE=4.4%偏低; 扣非净利+1724%; 营收+53%; 16个概念; 近期3条公告",
+      "technical": "[无] 暴量滞涨(换手26.9%)-10; 多头排列+15; 回踩MA10企稳+5; 假突破:3日2日上影-4; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "[无] [主力0分] 主力净流入[实时]-2.49%-15 否决4豁免(3日累计>0)-5; [龙虎17分] [盘中]封单3492.6%流通市值+10 [盘中]秒封/一字板+7; [盘口10分] 持续净流入2.37亿+10; [融资4分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近月3次涨停+10; 断板反包+15; 近5日活跃(均涨4.5%)+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 26.536,
+    "resonance": {
+      "count": 1,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "600186.SH",
+    "name": "莲花控股",
+    "scores": {
+      "fundamental": 86.0,
+      "technical": 33,
+      "fundflow": 23,
+      "sentiment": 0,
+      "shortterm": 13.5
+    },
+    "reasons": {
+      "fundamental": "[高] ROE=16.9%; 扣非净利+39%; 近期6条公告; 股东户数+10.2%; 解禁冲击低+0.1",
+      "technical": "[无] 换手15.5%健康+5; 暴量滞涨(换手15.5%)-10; 多头排列+15; 回踩MA10企稳+5; 下影支撑+4; 波动收敛(带宽34.9%)+5",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]-0.00%-15 否决4豁免(3日累计>0)-5; [龙虎11分] [盘中]封单190.1%流通市值+10 [盘中]早封板09:30:01+8 [盘中]开板82次-7; [盘口10分] 持续净流入0.53亿+10; [融资2分] [盘中]融资买入占比100.0%+2",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近月3次涨停+10; 断板反包+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 25.359999999999996,
+    "resonance": {
+      "count": 1,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "600769.SH",
+    "name": "祥龙电业",
+    "scores": {
+      "fundamental": 63.0,
+      "technical": 27,
+      "fundflow": 32,
+      "sentiment": 0,
+      "shortterm": 11.0
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=16.9%; 近期7条公告; 股东户数+5.4%; 解禁冲击低+0.1; 负债率70%",
+      "technical": "[无] 换手3.9%健康+5; 多头排列+15; 价>中轨+2; 分时强势(回撤0.0%)+3; 板块中性(30%>MA20)+2",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]-0.00%-15 否决4豁免(3日累计>0)-5 连续3日净流入+10; [龙虎9分] [盘中]封单4562.7%流通市值+10 [盘中]尾板14:22:36-8 [盘中]秒封/一字板+7; [盘口10分] 持续净流入2.13亿+10; [融资0分] [盘中]无融资数据; [锁仓13分] 流入递增锁仓+7 无抛压+3 流入加速+3",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 断板反包+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 23.659999999999997,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "605198.SH",
+    "name": "安德利",
+    "scores": {
+      "fundamental": 52.0,
+      "technical": 24,
+      "fundflow": 41,
+      "sentiment": 0,
+      "shortterm": 7.2
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=12.2%; 扣非净利-18%; 近期10条公告; 解禁冲击低+0.1",
+      "technical": "[无] 换手1.1%健康+5; 多头排列+15; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "[低] [主力0分] 主力净流入[T-1]-0.00%-15 否决4豁免(3日累计>0)-5; [龙虎21分] [盘中]封单717.3%流通市值+10 [盘中]早封板09:56:30+8 [盘中]开板1次+3; [盘口10分] 持续净流入0.38亿+10; [融资0分] [盘中]无融资数据; [锁仓10分] 流入递增锁仓+7 流入加速+3",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 23.516,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603989.SH",
+    "name": "艾华集团",
+    "scores": {
+      "fundamental": 61.0,
+      "technical": 28,
+      "fundflow": 27,
+      "sentiment": 0,
+      "shortterm": 14.8
+    },
+    "reasons": {
+      "fundamental": "[中] 扣非净利-14%; 11个概念; 近期4条公告; 股东户数-9.3%; 解禁冲击低+0.1",
+      "technical": "[无] 换手10.1%健康+5; 暴量滞涨(换手10.1%)-10; 多头排列+15; 回踩MA10企稳+5; 下影支撑+4; 价>中轨+2",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 否决4豁免(3日累计>0)-5 连续3日净流入+10; [龙虎3分] [盘中]封单1379.2%流通市值+10 [盘中]开板8次-7; [盘口14分] 持续净流入0.32亿+10 超大单主导+4; [融资4分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2; [锁仓6分] 无抛压+3 流入加速+3",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 2连板+30; 近5日活跃(均涨4.9%)+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 23.024,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002226.SZ",
+    "name": "江南化工",
+    "scores": {
+      "fundamental": 58.0,
+      "technical": 24,
+      "fundflow": 35,
+      "sentiment": 0,
+      "shortterm": 7.2
+    },
+    "reasons": {
+      "fundamental": "[中] 扣非净利-42%; 12个概念; 近期4条公告; 解禁冲击低+0.1",
+      "technical": "[无] 换手4.7%健康+5; 多头排列+15; MA60下倾-5; 回踩MA10企稳+5; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "[低] [主力10分] 主力净流入[实时]6.05%+15 主力占比偏弱[实时]6.6%-5; [龙虎25分] [盘中]封单8577.0%流通市值+10 [盘中]早封板09:25:00+8 [盘中]秒封/一字板+7; [盘口0分] 净流出1.75亿; [融资0分] [盘中]无融资数据",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 22.555999999999997,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "000962.SZ",
+    "name": "东方钽业",
+    "scores": {
+      "fundamental": 61.0,
+      "technical": 32,
+      "fundflow": 30,
+      "sentiment": 0,
+      "shortterm": 8.5
+    },
+    "reasons": {
+      "fundamental": "[中] 扣非净利-2%; 营收+41%; 7个概念; 近期5条公告; 解禁冲击低+0.1",
+      "technical": "[无] 换手6.2%健康+5; 多头排列+15; 回踩MA10企稳+5; 下影支撑+4; 假突破:3日2日上影-4; 价>中轨+2",
+      "fundflow": "[无] [主力5分] 主力占比[实时]88.2%+10 主力占比偏弱[T-1]6.5%-5; [龙虎25分] [盘中]封单1024.9%流通市值+10 [盘中]早封板10:11:57+8 [盘中]秒封/一字板+7; [盘口0分] 净流出1.43亿; [融资0分] [盘中]融资主力同向+2 [盘中]融资3日连降-5",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近5日温和(均涨2.4%)+5 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 22.48,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603667.SH",
+    "name": "五洲新春",
+    "scores": {
+      "fundamental": 42.0,
+      "technical": 22,
+      "fundflow": 33,
+      "sentiment": 0,
+      "shortterm": 8.5
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=3.1%偏低; 扣非净利-19%; 近期6条公告; 解禁冲击低+0.1",
+      "technical": "[无] 多头排列+15; MA60下倾-5; 回踩MA10企稳+5; 价>中轨+2; 分时强势(回撤0.0%)+3; 板块中性(30%>MA20)+2",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]-0.00%-15 否决4豁免(3日累计>0)-5; [龙虎9分] [盘中]封单529.6%流通市值+10 [盘中]尾板14:19:31-8 [盘中]秒封/一字板+7; [盘口10分] 持续净流入8.17亿+10; [融资4分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2; [锁仓10分] 流入递增锁仓+7 流入加速+3",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近5日温和(均涨2.1%)+5 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 19.919999999999998,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "600683.SH",
+    "name": "京投发展",
+    "scores": {
+      "fundamental": 91.0,
+      "technical": 12,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 19.8
+    },
+    "reasons": {
+      "fundamental": "[高] 扣非净利+21%; 营收+227%; 8个概念; 近期9条公告; 解禁冲击低+0.1",
+      "technical": "[无] 换手5.6%健康+5; 空头排列-10; 收盘<=MA20-5; 波动收敛(带宽59.0%)+5; 分时走弱(价<中轨)-8; 板块中性(30%>MA20)+2",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-15.9%<5%+3日累计净流入-350≤0",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 3连板+40; 近月4次涨停+10; 断板反包+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 19.244,
+    "resonance": {
+      "count": 1,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603931.SH",
+    "name": "格林达",
+    "scores": {
+      "fundamental": 45.0,
+      "technical": 24,
+      "fundflow": 26,
+      "sentiment": 0,
+      "shortterm": 11.0
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=1.5%偏低; 扣非净利-9%; 6个概念; 近期3条公告; 解禁冲击低+0.1",
+      "technical": "[无] 换手7.5%健康+5; 暴量滞涨(换手7.5%)-10; 多头排列+15; 回踩MA10企稳+5; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]-0.00%-15 否决4豁免(3日累计>0)-5 连续3日净流入+10; [龙虎13分] [盘中]封单2545.0%流通市值+10 [盘中]开板1次+3; [盘口10分] 持续净流入0.31亿+10; [融资0分] [盘中]无融资数据; [锁仓3分] 无抛压+3",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近月3次涨停+10; 近5日温和(均涨2.5%)+5 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 19.1,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002245.SZ",
+    "name": "蔚蓝锂芯",
+    "scores": {
+      "fundamental": 69.0,
+      "technical": 12,
+      "fundflow": 21,
+      "sentiment": 0,
+      "shortterm": 7.2
+    },
+    "reasons": {
+      "fundamental": "[中] 扣非净利+32%; 9个概念; 近期1条公告; 解禁冲击低+0.1",
+      "technical": "[无] 换手11.3%健康+5; 均线多头(斜率平)+10; 收盘<=MA20-5; 假突破:3日2日上影-4; 分时走弱(价<中轨)-8; 板块中性(30%>MA20)+2",
+      "fundflow": "[无] [主力0分] 主力净流入[实时]-21.34%-15 否决4豁免(3日累计>0)-5; [龙虎0分] [盘中]封单1407.1%流通市值+10 [盘中]T-1未涨停-15; [盘口14分] 持续净流入3.26亿+10 超大单主导+4; [融资4分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2; [锁仓3分] 流入加速+3",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 18.936,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "000417.SZ",
+    "name": "合百集团",
+    "scores": {
+      "fundamental": 47.0,
+      "technical": 24,
+      "fundflow": 15,
+      "sentiment": 0,
+      "shortterm": 19.8
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=3.4%偏低; 扣非净利-27%; 14个概念; 近期7条公告; 解禁冲击低+0.1",
+      "technical": "[无] 多头排列+15; 回踩MA10企稳+5; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "[无] [主力0分] 主力占比偏弱[实时]5.7%-5; [龙虎13分] [盘中]封单10920.4%流通市值+10 [盘中]开板1次+3; [盘口0分] 净流出3.31亿 对倒嫌疑换手30.3%-12; [融资2分] [盘中]融资买入占比100.0%+2",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 3连板+40; 近月3次涨停+10; 近5日活跃(均涨4.7%)+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 18.544,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "605123.SH",
+    "name": "派克新材",
+    "scores": {
+      "fundamental": 69.0,
+      "technical": 29,
+      "fundflow": 13,
+      "sentiment": 0,
+      "shortterm": 8.5
+    },
+    "reasons": {
+      "fundamental": "[中] 营收+36%; 8个概念; 股东户数-14.0%; 解禁冲击低+0.1",
+      "technical": "[无] 换手6.4%健康+5; 多头排列+15; 回踩MA10企稳+5; 假突破:3日2日上影-4; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]8.7%-5 主力占比偏弱[T-1]8.7%-5; [龙虎11分] [盘中]封单268.8%流通市值+10 [盘中]早封板10:09:03+8 [盘中]开板34次-7; [盘口0分] 净流出0.57亿; [融资2分] [盘中]融资买入占比100.0%+2",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近5日温和(均涨1.1%)+5 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 18.26,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "600584.SH",
+    "name": "长电科技",
+    "scores": {
+      "fundamental": 59.0,
+      "technical": 28,
+      "fundflow": 15,
+      "sentiment": 0,
+      "shortterm": 11.0
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=1.0%偏低; 扣非净利+37%; 20个概念; 近期1条公告; 解禁冲击低+0.1",
+      "technical": "[无] 暴量滞涨(换手17.5%)-10; 多头排列+15; 回踩MA10企稳+5; 下影支撑+4; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]-0.00%-15 否决4豁免(3日累计>0)-5 连续3日净流入+10; [龙虎0分] [盘中]封单1101.0%流通市值+10 [盘中]T-1未涨停-15; [盘口10分] 持续净流入3.56亿+10; [融资2分] [盘中]融资买入占比100.0%+2; [锁仓3分] 无抛压+3",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近5日活跃(均涨4.3%)+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 18.080000000000002,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "605488.SH",
+    "name": "福莱新材",
+    "scores": {
+      "fundamental": 52.0,
+      "technical": 22,
+      "fundflow": 21,
+      "sentiment": 0,
+      "shortterm": 8.5
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=1.0%偏低; 扣非净利-48%; 营收+36%; 近期8条公告; 股东户数-18.6%",
+      "technical": "[无] 换手9.5%健康+5; 暴量滞涨(换手9.5%)-10; 多头排列+15; MA60下倾-5; 回踩MA10企稳+5; 价>中轨+2",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]7.9%-5 主力占比偏弱[T-1]7.9%-5; [龙虎0分] [盘中]封单34.3%流通市值+10 [盘中]T-1未涨停-15; [盘口14分] 持续净流入1.00亿+10 超大单主导+4; [融资0分] [盘中]无融资数据; [锁仓7分] 流入递增锁仓+7",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近5日温和(均涨2.5%)+5 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 17.72,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603725.SH",
+    "name": "天安新材",
+    "scores": {
+      "fundamental": 64.0,
+      "technical": 27,
+      "fundflow": 16,
+      "sentiment": 0,
+      "shortterm": 4.8
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=13.9%; 5个概念; 近期4条公告; 股东户数-11.5%; 解禁冲击低+0.1",
+      "technical": "[无] 换手8.6%健康+5; 暴量滞涨(换手8.6%)-10; 多头排列+15; 回踩MA10企稳+5; 假突破:3日2日上影-4; 价>中轨+2",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 否决4豁免(3日累计>0)-5 连续3日净流入+10; [龙虎3分] [盘中]封单2702.3%流通市值+10 [盘中]开板6次-7; [盘口10分] 持续净流入0.07亿+10; [融资0分] [盘中]无融资数据; [锁仓3分] 无抛压+3",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 近期无涨停; 近5日温和(均涨1.6%)+5 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 17.264,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603738.SH",
+    "name": "泰晶科技",
+    "scores": {
+      "fundamental": 67.0,
+      "technical": 29,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 19.8
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=3.0%偏低; 扣非净利+5041%; 4个概念; 近期3条公告; 解禁冲击低+0.1",
+      "technical": "[无] 换手13.4%健康+5; 多头排列+15; 波动收敛(带宽65.3%)+5; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-3.2%<5%+3日累计净流入-15157≤0",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 3连板+40; 近月4次涨停+10; 断板反包+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 17.244,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "000510.SZ",
+    "name": "新金路",
+    "scores": {
+      "fundamental": 55.0,
+      "technical": 7,
+      "fundflow": 25,
+      "sentiment": 0,
+      "shortterm": 3.5
+    },
+    "reasons": {
+      "fundamental": "[低] 扣非净利-38%; 7个概念; 近期9条公告; 股东户数-8.4%; 解禁冲击低+0.1",
+      "technical": "[无] 换手9.3%健康+5; 空头排列-10; MA60下倾-5; 收盘<=MA20-5; 假突破:3日2日上影-4; 分时走弱(价<中轨)-8",
+      "fundflow": "[无] [主力25分] 主力净流入[实时]10.45%+15 主力占比[实时]73.2%+10; [龙虎0分] [盘中]封单41.3%流通市值+10 [盘中]T-1未涨停-15; [盘口0分] 净流出0.11亿; [融资0分] [盘中]无融资数据",
+      "sentiment": "核按钮A诱多:20260514最高17.12跌停14.95",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 近期无涨停 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 16.740000000000002,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "601991.SH",
+    "name": "大唐发电",
+    "scores": {
+      "fundamental": 65.0,
+      "technical": 27,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 16.0
+    },
+    "reasons": {
+      "fundamental": "[中] 扣非净利+30%; 14个概念; 近期5条公告; 股东户数+53.8%; 解禁冲击低+0.1",
+      "technical": "[无] 换手7.8%健康+5; 多头排列+15; 假突破:3日2日上影-4; 价>中轨+2; 分时强势(回撤0.0%)+3; 板块中性(30%>MA20)+2",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比1.1%<5%+3日累计净流入-7750≤0",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近月7次涨停+20; 断板反包+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 15.739999999999998,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603158.SH",
+    "name": "腾龙股份",
+    "scores": {
+      "fundamental": 62.0,
+      "technical": 0,
+      "fundflow": 13,
+      "sentiment": 0,
+      "shortterm": 11.0
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=2.3%偏低; 扣非净利+23%; 8个概念; 近期5条公告; 解禁冲击低+0.1",
+      "technical": "资金持续出逃:近2日净流出+收盘/中轨0.978<0.99",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15; [龙虎13分] [盘中]封单4816.1%流通市值+10 [盘中]开板1次+3; [盘口0分] 净流出0.46亿; [融资0分] [盘中]无融资数据",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 2连板+30 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 15.66,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "001366.SZ",
+    "name": "播恩集团",
+    "scores": {
+      "fundamental": 0,
+      "technical": 0,
+      "fundflow": 46,
+      "sentiment": 0,
+      "shortterm": 3.5
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 大额解禁20260309占比64.7%",
+      "technical": "资金持续出逃:近2日净流出+收盘/中轨0.986<0.99",
+      "fundflow": "[低] [主力35分] 主力净流入[实时]4.56%+15 主力占比[实时]37.5%+10 主力占比[T-1]39.1%+10; [龙虎11分] [盘中]封单11018.8%流通市值+10 [盘中]早封板09:40:54+8 [盘中]开板3次-7; [盘口0分] 净流出0.10亿; [融资0分] [盘中]无融资数据",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 近期无涨停 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 14.780000000000001,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "600530.SH",
+    "name": "交大昂立",
+    "scores": {
+      "fundamental": 53.0,
+      "technical": 24,
+      "fundflow": 2,
+      "sentiment": 0,
+      "shortterm": 16.0
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=1.1%偏低; 7个概念; 近期5条公告; 解禁冲击低+0.1",
+      "technical": "[无] 换手6.5%健康+5; 多头排列+15; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15; [龙虎0分] [盘中]封单5057.2%流通市值+10 [盘中]T-1未涨停-15; [盘口0分] 净流出0.62亿; [融资2分] [盘中]融资主力同向+2",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近月5次涨停+20; 断板反包+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 14.419999999999998,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "601609.SH",
+    "name": "金田股份",
+    "scores": {
+      "fundamental": 53.0,
+      "technical": 29,
+      "fundflow": 7,
+      "sentiment": 0,
+      "shortterm": 7.2
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=1.6%偏低; 扣非净利-22%; 营收+34%; 5个概念; 近期4条公告",
+      "technical": "[无] 换手7.5%健康+5; 多头排列+15; 回踩MA10企稳+5; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]-0.00%-15 否决4豁免(3日累计>0)-5; [龙虎3分] [盘中]封单1274.5%流通市值+10 [盘中]开板3次-7; [盘口0分] 净流出1.43亿; [融资4分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 13.856,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002980.SZ",
+    "name": "华盛昌",
+    "scores": {
+      "fundamental": 48.0,
+      "technical": 33,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 14.8
+    },
+    "reasons": {
+      "fundamental": "[低] 扣非净利-37%; 6个概念; 近期3条公告; 股东户数+17.5%; 解禁冲击低+0.1",
+      "technical": "[无] 换手16.5%健康+5; 多头排列+15; 回踩MA10企稳+5; 下影支撑+4; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-11.8%<5%+3日累计净流入-12739≤0",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近月3次涨停+10; 断板反包+15; 近5日温和(均涨2.4%)+5 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 13.504,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603636.SH",
+    "name": "南威软件",
+    "scores": {
+      "fundamental": 56.0,
+      "technical": 24,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 9.8
+    },
+    "reasons": {
+      "fundamental": "[中] 扣非净利-39%; 15个概念; 近期4条公告; 股东户数-12.2%; 解禁冲击低+0.1",
+      "technical": "[无] 换手8.9%健康+5; 多头排列+15; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比0.4%<5%+3日累计净流入-39338≤0",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近月3次涨停+10 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 12.504,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002374.SZ",
+    "name": "中锐股份",
+    "scores": {
+      "fundamental": 0,
+      "technical": 29,
+      "fundflow": 17,
+      "sentiment": 0,
+      "shortterm": 16.0
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 扣非净利润连续亏损(无困境反转)",
+      "technical": "[无] 换手7.5%健康+5; 多头排列+15; 回踩MA10企稳+5; 下影支撑+4; 假突破:3日2日上影-4; 价>中轨+2",
+      "fundflow": "[无] [主力10分] 主力占比[实时]34.3%+10; [龙虎3分] [盘中]封单13457.1%流通市值+10 [盘中]开板5次-7; [盘口0分] 净流出0.54亿; [融资4分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 2连板+30; 断板反包+15; 近5日温和(均涨2.9%)+5 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 11.9,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "600666.SH",
+    "name": "奥瑞德",
+    "scores": {
+      "fundamental": 60.0,
+      "technical": 0,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 11.0
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=15.4%; 扣非净利-7%; 6个概念; 近期1条公告; 解禁冲击低+0.1",
+      "technical": "资金持续出逃:近2日净流出+收盘/中轨0.888<0.99",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比3.5%<5%+3日累计净流入-55889≤0",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 断板反包+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 11.48,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603267.SH",
+    "name": "鸿远电子",
+    "scores": {
+      "fundamental": 45.0,
+      "technical": 29,
+      "fundflow": 5,
+      "sentiment": 0,
+      "shortterm": 3.5
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=2.2%偏低; 扣非净利-31%; 4个概念; 近期4条公告; 解禁冲击低+0.1",
+      "technical": "[无] 换手6.1%健康+5; 多头排列+15; 回踩MA10企稳+5; 下影支撑+4; 假突破:3日2日上影-4; 价>中轨+2",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]6.9%-5 主力占比偏弱[T-1]6.9%-5; [龙虎3分] [盘中]封单1319.9%流通市值+10 [盘中]开板22次-7; [盘口0分] 净流出0.18亿; [融资2分] [盘中]融资买入占比100.0%+2",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 近期无涨停 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 11.099999999999998,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "000695.SZ",
+    "name": "滨海能源",
+    "scores": {
+      "fundamental": 0,
+      "technical": 14,
+      "fundflow": 25,
+      "sentiment": 0,
+      "shortterm": 8.5
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 负债率83%>70%且经营现金流为负",
+      "technical": "[无] 回踩MA10企稳+5; 波动收敛(带宽12.4%)+5; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "[无] [主力25分] 主力净流入[实时]9.19%+15 主力占比[实时]66.7%+10; [龙虎0分] [盘中]封单1081.7%流通市值+10 [盘中]T-1未涨停-15; [盘口0分] 净流出0.35亿 对倒嫌疑换手16.5%-12; [融资0分] [盘中]无融资数据",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近5日温和(均涨1.5%)+5 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 11.0,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "600246.SH",
+    "name": "万通发展",
+    "scores": {
+      "fundamental": 0,
+      "technical": 32,
+      "fundflow": 11,
+      "sentiment": 0,
+      "shortterm": 17.2
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 扣非净利润连续亏损(无困境反转)",
+      "technical": "[无] 换手14.0%健康+5; 多头排列+15; 回踩MA10企稳+5; 价>中轨+2; 分时强势(回撤0.0%)+3; 板块中性(30%>MA20)+2",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]8.3%-5 主力占比偏弱[T-1]8.3%-5; [龙虎9分] [盘中]封单617.5%流通市值+10 [盘中]尾板14:00:02-8 [盘中]秒封/一字板+7; [盘口0分] 净流出11.13亿 对倒嫌疑换手14.0%-12; [融资2分] [盘中]融资买入占比100.0%+2",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近月3次涨停+10; 断板反包+15; 近5日活跃(均涨4.4%)+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 10.675999999999998,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002957.SZ",
+    "name": "科瑞技术",
+    "scores": {
+      "fundamental": 69.0,
+      "technical": 0,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 3.5
+    },
+    "reasons": {
+      "fundamental": "[中] 11个概念; 近期3条公告; 股东户数-10.2%; 解禁冲击低+0.1",
+      "technical": "资金持续出逃:近2日净流出+收盘/中轨0.923<0.99",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-16.3%<5%+3日累计净流入-3682≤0",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 近期无涨停 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 10.639999999999999,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603538.SH",
+    "name": "美诺华",
+    "scores": {
+      "fundamental": 57.0,
+      "technical": 0,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 7.2
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=1.3%偏低; 扣非净利+48%; 近期3条公告; 股东户数+52.8%; 解禁冲击低+0.1",
+      "technical": "资金持续出逃:近2日净流出+收盘/中轨0.939<0.99",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 否决4豁免(3日累计>0)-5; [龙虎0分] [盘中]封单58.7%流通市值+10 [盘中]T-1未涨停-15; [盘口0分] 净流出1.17亿 对倒嫌疑换手18.3%-12; [融资0分] [盘中]融资买入占比100.0%+2 [盘中]融资主力同向+2 [盘中]融资3日连降-5",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 9.995999999999999,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603121.SH",
+    "name": "华培动力",
+    "scores": {
+      "fundamental": 0,
+      "technical": 7,
+      "fundflow": 24,
+      "sentiment": 0,
+      "shortterm": 7.2
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 扣非净利润连续亏损(无困境反转)",
+      "technical": "[无] 换手6.1%健康+5; 均线多头(斜率平)+10; MA60下倾-5; 收盘<=MA20-5; 分时走弱(价<中轨)-8; 板块中性(30%>MA20)+2",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]-0.00%-15 否决4豁免(3日累计>0)-5; [龙虎11分] [盘中]封单1859.2%流通市值+10 [盘中]早封板09:44:41+8 [盘中]开板20次-7; [盘口10分] 持续净流入0.64亿+10; [融资0分] [盘中]无融资数据; [锁仓3分] 流入加速+3",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 9.776,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "605011.SH",
+    "name": "杭州热电",
+    "scores": {
+      "fundamental": 51.0,
+      "technical": 7,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 3.5
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=1.7%偏低; 近期3条公告; 解禁冲击低+0.1",
+      "technical": "[无] 换手1.7%健康+5; 空头排列-10; 收盘<=MA20-5; 板块中性(30%>MA20)+2",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-5.7%<5%+3日累计净流入-545≤0",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 近期无涨停 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 8.679999999999998,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603596.SH",
+    "name": "伯特利",
+    "scores": {
+      "fundamental": 43.0,
+      "technical": 0,
+      "fundflow": 5,
+      "sentiment": 0,
+      "shortterm": 3.5
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=3.3%偏低; 扣非净利-4%; 4个概念; 近期1条公告; 股东户数+8.6%",
+      "technical": "资金持续出逃:近2日净流出+收盘/中轨0.823<0.99",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]12.3%-5 主力占比偏弱[T-1]12.3%-5; [龙虎3分] [盘中]封单489.2%流通市值+10 [盘中]开板11次-7; [盘口0分] 净流出3.22亿; [融资2分] [盘中]融资买入占比100.0%+2",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 近期无涨停 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 8.499999999999998,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603773.SH",
+    "name": "沃格光电",
+    "scores": {
+      "fundamental": 0,
+      "technical": 18,
+      "fundflow": 3,
+      "sentiment": 0,
+      "shortterm": 13.5
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 扣非净利润连续亏损(无困境反转)",
+      "technical": "[无] 暴量滞涨(换手16.2%)-10; 回踩MA10企稳+5; 下影支撑+4; 波动收敛(带宽47.5%)+5; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]-0.00%-15 否决4豁免(3日累计>0)-5; [龙虎3分] [盘中]封单1246.8%流通市值+10 [盘中]开板4次-7; [盘口0分] 净流出1.78亿 对倒嫌疑换手16.2%-12; [融资0分] [盘中]无融资数据",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15; 近月4次涨停+10; 断板反包+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 6.119999999999999,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002962.SZ",
+    "name": "五方光电",
+    "scores": {
+      "fundamental": 0,
+      "technical": 18,
+      "fundflow": 9,
+      "sentiment": 0,
+      "shortterm": 3.5
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 扣非净利润连续亏损(无困境反转)",
+      "technical": "[无] 换手9.6%健康+5; 回踩MA10企稳+5; 下影支撑+4; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]15.0%-5 主力占比偏弱[T-1]15.0%-5; [龙虎9分] [盘中]封单17651.8%流通市值+10 [盘中]尾板14:52:36-8 [盘中]秒封/一字板+7; [盘口0分] 净流出1.94亿; [融资0分] [盘中]无融资数据",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 近期无涨停 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 5.119999999999999,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002825.SZ",
+    "name": "纳尔股份",
+    "scores": {
+      "fundamental": 0,
+      "technical": 29,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 7.2
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 扣非净利润连续亏损(无困境反转)",
+      "technical": "[无] 换手2.8%健康+5; 均线多头(斜率平)+10; 回踩MA10企稳+5; 波动收敛(带宽16.9%)+5; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-18.2%<5%+3日累计净流入-2439≤0",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 4.336,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "003043.SZ",
+    "name": "华亚智能",
+    "scores": {
+      "fundamental": 0,
+      "technical": 29,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 4.8
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 扣非净利润连续亏损(无困境反转)",
+      "technical": "[无] 换手8.6%健康+5; 多头排列+15; 回踩MA10企稳+5; 价>中轨+2; 板块中性(30%>MA20)+2",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-5.3%<5%+3日累计净流入-890≤0",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 近期无涨停; 近5日温和(均涨1.2%)+5 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 3.664,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "603031.SH",
+    "name": "安孚科技",
+    "scores": {
+      "fundamental": 0,
+      "technical": 7,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 7.2
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 商誉占比102%>30%",
+      "technical": "[无] 换手8.9%健康+5; 均线多头(斜率平)+10; MA60下倾-5; 收盘<=MA20-5; 板块中性(30%>MA20)+2",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比2.9%<5%+3日累计净流入-48606≤0",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 2.576,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002235.SZ",
+    "name": "安妮股份",
+    "scores": {
+      "fundamental": 0,
+      "technical": 0,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 7.2
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 扣非净利润连续亏损(无困境反转)",
+      "technical": "资金持续出逃:近2日净流出+收盘/中轨0.944<0.99",
+      "fundflow": "否决: 纯散户博弈[实时]:主力净占比-71.4%<5%+3日累计净流入-10447≤0",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 首板+15 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 2.016,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  },
+  {
+    "code": "002725.SZ",
+    "name": "跃岭股份",
+    "scores": {
+      "fundamental": 0,
+      "technical": 0,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 3.5
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 扣非净利润连续亏损(无困境反转)",
+      "technical": "资金持续出逃:近2日净流出+收盘/中轨0.895<0.99",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-15.3%<5%+3日累计净流入-1601≤0",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 今日未涨停(参考历史) | [连板] 近期无涨停 | [开盘] 暂无今日数据 | [板块] 无数据"
+    },
+    "weights": {
+      "fundamental": "0.7",
+      "technical": "0.4",
+      "fundflow": "1.5",
+      "sentiment": "1.0",
+      "shortterm": "1.4"
+    },
+    "total": 0.9799999999999999,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    }
+  }
+]

@@ -343,9 +343,10 @@ def score_aggression(code: str) -> tuple[float, str]:
     today = _today_str()
 
     try:
+        from datetime import timedelta
         # 获取近20个交易日数据
         end_dt = datetime.now()
-        start_dt = end_dt - __import__("datetime").timedelta(days=30)
+        start_dt = end_dt - timedelta(days=30)
         start = start_dt.strftime("%Y%m%d")
 
         df_daily = pro.daily(ts_code=code, start_date=start, end_date=today)
