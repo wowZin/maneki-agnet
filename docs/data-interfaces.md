@@ -88,3 +88,17 @@
 | limit_list返回超量 | 不支持日期筛选 | 取items[0]为最新 |
 | 东财API超时/空 | 代理IP过期 | 重试+刷新代理 |
 | call_tushare静默失败 | except:pass吞错误 | 看return是否为空dict |
+
+## akshare 接口 (5个)
+
+> ⚠️ akshare 底层封装东方财富API。本服务器 `push2.eastmoney.com` 被TCP层封禁，**akshare 大部分接口不可用**。
+
+| 接口 | 用途 | 文件 | 可用? | 备注 |
+|------|------|------|:--:|------|
+| `ak.stock_fund_flow_individual()` | 全市场实时资金流向 | zt_pipeline.py | ❌ | 封禁,降级用Tushare T+1 |
+| `ak.stock_zh_a_spot_em()` | 全市场实时行情 | scan_akshare.py | ❌ | 封禁 |
+| `ak.stock_individual_fund_flow()` | 个股资金流 | scan_akshare.py | ❌ | 封禁 |
+| `ak.stock_board_concept_name_em()` | 概念板块列表 | sentiment_analysis.py | ❌ | 封禁 |
+| `ak.stock_board_concept_cons_em()` | 概念成分股 | sentiment_analysis.py | ❌ | 封禁 |
+
+**结论**: akshare 全系不可用（底层走东财被封IP），已全部降级为 Tushare 或 CDP+代理 方案。保留在代码中作为备用注释，实际不生效。
