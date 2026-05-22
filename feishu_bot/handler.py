@@ -139,33 +139,58 @@ def _score_one_stock(code: str) -> dict:
 def _get_realtime_quote(code: str) -> dict:
     """获取个股实时行情（涨幅%、最新价）
 
-    通过 Eastmoney clist 分页搜索 + zdtps 代理。
+    盘中（9:15-15:00）：东财个股实时API + get_proxies_dict 代理直连
+    盘后（其他时间）：Tushare daily 收盘数据
     """
+    from scripts.zt_pipeline import is_trading_time
+
+    raw = code.split(".")[0]
+
+    if is_trading_time():
+        # ── 盘中：东财个股实时API ──
+        try:
+            import requests as _req
+            import sys as _sys
+            _sys.path.insert(0, str(SCRIPTS_DIR))
+            from proxy_utils import get_proxies_dict
+            from dotenv import load_dotenv
+            import os
+
+            load_dotenv(PROJECT_DIR / ".env")
+            proxies = get_proxies_dict() if os.getenv("PROXY_ENABLED", "").lower() == "true" else None
+
+            market = "0" if raw.startswith(("00", "30")) else "1"
+            url = (f"https://push2.eastmoney.com/api/qt/stock/get?"
+                   f"secid={market}.{raw}&fields=f43,f44,f45,f46,f47,f48,f49,"
+                   f"f50,f51,f52,f53,f54,f55,f57,f58,f168,f170,f171,f292")
+            resp = _req.get(url, proxies=proxies, timeout=5)
+            d = resp.json().get("data", {})
+            price = d.get("f43", 0) or 0
+            pct = d.get("f170", 0) or 0
+            if price:
+                return {"price": float(price), "change_pct": float(pct)}
+        except Exception as e:
+            print(f"  [盘中行情] {code} 失败: {e}")
+        return {"price": 0, "change_pct": 0}
+
+    # ── 盘后：Tushare daily ──
     try:
-        import requests as _req
-        import sys as _sys
-        _sys.path.insert(0, str(SCRIPTS_DIR))
-        from proxy_utils import get_requests_session_with_proxy
-
-        raw = code.split(".")[0]
-        raw_num = int(raw)
-
-        # 确定市场和fs参数
-        if raw.startswith("6"):
-            markets = [("m:1+t:2", "SH主板"), ("m:1+t:23", "SH科创板")]
-            base = 600000
-        elif raw.startswith("3"):
-            markets = [("m:0+t:80", "SZ创业板")]
-            base = 300000
-        else:
-            markets = [("m:0+t:6", "SZ主板"), ("m:0+t:80", "SZ创业板")]
-            base = 0
-
-        # 盘后代理不稳定，bot跳过实时行情（不影响核心打分）
-        return {"price": 0, "change_pct": 0}
+        import os as _os
+        import tushare as _ts
+        from dotenv import load_dotenv
+        load_dotenv(PROJECT_DIR / ".env")
+        _ts.set_token(_os.getenv("TUSHARE_TOKEN", ""))
+        pro = _ts.pro_api()
+        df = pro.daily(ts_code=code, start_date=datetime.now().strftime("%Y%m%d"),
+                      end_date=datetime.now().strftime("%Y%m%d"),
+                      fields="trade_date,close,pct_chg")
+        if df is not None and len(df) > 0:
+            row = df.iloc[0]
+            return {"price": float(row["close"]), "change_pct": float(row["pct_chg"])}
     except Exception as e:
-        print(f"  [实时行情] {code} 获取失败: {e}")
-        return {"price": 0, "change_pct": 0}
+        print(f"  [Tushare daily] {code} 失败: {e}")
+
+    return {"price": 0, "change_pct": 0}
 
 
 # ── 积极信号总结 ──────────────────────────────────────────
