@@ -54,15 +54,16 @@
 
 ## 东方财富 API (2个)
 
-> 方式: **requests + zdtps代理**（非CDP）。代理配置: `.env` 中 `PROXY_ENABLED=true`, 模块 `scripts/proxy_utils.py`
+> 数据优先级: **requests+代理(Eastmoney) > Tushare**。实时数据优先走东财API+代理，Tushare仅作兜底。
+> 方式: **requests + zdtps代理**。代理配置: `.env` 中 `PROXY_ENABLED=true`, 模块 `scripts/proxy_utils.py`
 
 | 接口 | 用途 | 方式 | 已知坑 |
 |------|------|------|------|
-| `push2.eastmoney.com/api/qt/clist/get` | 行情列表(涨幅/换手/量比) | requests+代理 | `po=0`升序/`po=1`降序;代理IP约2-3分钟过期 |
+| `push2.eastmoney.com/api/qt/clist/get` | 异动扫描/行情列表 | requests+代理 | `po=0`升序/`po=1`降序;代理IP约2-3分钟过期 |
 | `push2.eastmoney.com/api/qt/stock/get` | 个股实时行情(分时数据) | requests+代理 | secid格式:`{market}.{code}` |
 
 > ⚠️ `push2.eastmoney.com` 被本服务器TCP层封禁，必须走zdtps动态代理(`s189.zdtps.com:8080`)。
-> CDP 不走通（Chrome即使配置 `--proxy-server`，页面级导航仍有SSL/连接波动），仅用于涨速页面抓取（`scan_surge()`），不用于API调用。
+> CDP模式已废弃，异动扫描使用 requests+代理 直接调东财clist API。
 
 ## 关键时序窗口
 

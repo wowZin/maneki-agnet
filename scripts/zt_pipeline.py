@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
 涨停预测完整流程脚本
-流程：扫描涨速 → 4维度评分 → 排序 → 飞书推送
+流程：异动扫描(东财API+代理) → 五维度评分 → 排序 → 飞书推送
 
 用法:
-  python scripts/zt_pipeline.py                  # 完整流程(需要Chrome CDP)
+  python scripts/zt_pipeline.py                  # 完整流程(requests+代理)
   python scripts/zt_pipeline.py --from-file=data/signals/xxx.json  # 从已有文件读取
 """
 
 import json
 import os
-import subprocess
+import re
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 import argparse
@@ -179,93 +180,66 @@ def list_to_dict(items, fields):
             result.append(d)
     return result
 
-# ===== 1. 扫描涨速数据 =====
-def scan_surge(connect_retries=3, navigate_retries=2):
-    """通过CDP获取涨速数据（带重试机制）
+# ===== 1. 扫描异动股 =====
+def scan_surge():
+    """通过东方财富clist API获取涨速异动股（requests+代理，替代CDP方案）
     
-    优先使用 cdp_fetch 模块（函数化+重试），降级回 subprocess 调用 scan_cdp.py
-    
-    Args:
-        connect_retries: CDP连接最大重试次数
-        navigate_retries: 导航获取最大重试次数
+    数据源: push2.eastmoney.com/api/qt/clist/get (fid=f11按5分钟涨速降序)
     Returns: list[dict] - [{code, name}] 候选股列表，或None
     """
-    # 方案1: 直接调用 cdp_fetch 模块（函数化，带重试）
-    try:
-        from cdp_fetch import get_surge_rate_cdp
-        stocks_raw = get_surge_rate_cdp(
-            connect_retries=connect_retries,
-            navigate_retries=navigate_retries,
-        )
-        if stocks_raw is None:
-            return None  # 非交易时段或彻底失败
-        
-        candidates = []
-        for s in stocks_raw:
-            code = s.get("代码") or s.get("code") or s.get("ts_code", "")
-            name = s.get("名称") or s.get("name", "")
-            if "." not in code:
-                if code.startswith("6"):
-                    code = f"{code}.SH"
-                else:
-                    code = f"{code}.SZ"
-            candidates.append({"code": code, "name": name})
-        
-        print(f"扫描完成(cdp_fetch模块): {len(candidates)} 只候选股")
-        return candidates
-        
-    except ImportError:
-        print("  cdp_fetch模块不可用，降级使用subprocess方式")
+    import re
+    from scripts.proxy_utils import get_proxies_dict
     
-    # 方案2: subprocess调用scan_cdp.py（旧方式，无重试）
-    scan_script = PROJECT_DIR / "scripts" / "scan_cdp.py"
-    result = subprocess.run(
-        [sys.executable, str(scan_script)],
-        capture_output=True,
-        text=True,
-        cwd=str(PROJECT_DIR)
+    if not is_trading_time():
+        print(f"跳过扫描: 非交易时段 ({datetime.now().strftime('%H:%M')})")
+        return None
+    
+    api_url = (
+        "https://push2.eastmoney.com/api/qt/clist/get?"
+        "np=1&fltt=2&invt=2&"
+        "fs=m:0+t:6+f:!2,m:0+t:80+f:!2,m:1+t:2+f:!2,m:1+t:23+f:!2,m:0+t:81+s:262144+f:!2&"
+        "fields=f12,f14,f2,f3,f11&"
+        "fid=f11&pn=1&pz=100&po=1&dect=1&"
+        "ut=fa5fd1943c7b386f172d6893dbfba10b"
     )
-    if result.returncode != 0:
-        print(f"扫描失败: {result.stderr}")
-        return None
     
-    # scan_cdp.py 在非交易时段会exit(0)并输出提示，需检查stdout
-    if "跳过扫描" in result.stdout:
-        print(f"扫描跳过: 非交易时段或周末休市")
-        return None
+    for attempt in range(3):
+        proxies = get_proxies_dict()  # 每次重试刷新代理（IP约2-3分钟过期）
+        try:
+            resp = requests.get(api_url, proxies=proxies, timeout=15)
+            data = resp.json()
+            items = data.get("data", {}).get("diff", [])
+            if not items:
+                print(f"  扫描返回空数据(尝试{attempt+1}/3)")
+                if attempt < 2:
+                    time.sleep(2)
+                    continue
+                return None
+            
+            candidates = []
+            for s in items:
+                code = s.get("f12", "")
+                name = s.get("f14", "")
+                if re.search(r"ST|\*ST|退|N", name or ""):
+                    continue
+                if re.match(r"^(300|301|688|8|4|920)", code):
+                    continue
+                if "." not in code:
+                    if code.startswith("6"):
+                        code = f"{code}.SH"
+                    else:
+                        code = f"{code}.SZ"
+                candidates.append({"code": code, "name": name})
+            
+            print(f"扫描完成(requests+代理): {len(candidates)} 只候选股")
+            return candidates
+            
+        except Exception as e:
+            print(f"  扫描失败(尝试{attempt+1}/3): {e}")
+            if attempt < 2:
+                time.sleep(2)
     
-    # 找到最新的信号文件
-    signals_dir = PROJECT_DIR / "data" / "signals"
-    signal_files = sorted(signals_dir.glob("*.json"), reverse=True)
-    if not signal_files:
-        return None
-    
-    with open(signal_files[0]) as f:
-        raw = json.load(f)
-    
-    # 兼容两种格式
-    if isinstance(raw, dict) and "stocks" in raw:
-        stocks = raw["stocks"]
-    elif isinstance(raw, list):
-        stocks = raw
-    else:
-        print(f"无法解析信号文件格式")
-        return None
-    
-    # 统一转换为标准格式
-    candidates = []
-    for s in stocks:
-        code = s.get("代码") or s.get("code") or s.get("ts_code", "")
-        name = s.get("名称") or s.get("name", "")
-        if "." not in code:
-            if code.startswith("6"):
-                code = f"{code}.SH"
-            else:
-                code = f"{code}.SZ"
-        candidates.append({"code": code, "name": name})
-    
-    print(f"扫描完成(subprocess方式): {len(candidates)} 只候选股")
-    return candidates
+    return None
 
 def load_from_file(filepath):
     """从已有文件加载信号"""
@@ -3394,7 +3368,7 @@ def main():
     if args.from_file:
         candidates = load_from_file(args.from_file)
     else:
-        print("\n[1/5] 扫描涨速数据...")
+        print("\n[1/5] 异动扫描(东财API+代理)...")
         candidates = scan_surge()
     
     if not candidates:
