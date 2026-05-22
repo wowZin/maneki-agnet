@@ -44,11 +44,11 @@ def feishu_title_prefix():
 
 # ===== Agent 权重配置（从.env读取，默认=1） =====
 AGENT_WEIGHTS = {
-    "fundamental": float(CONFIG.get("AGENT_WEIGHT_FUNDAMENTAL", "0.5")),
-    "technical": float(CONFIG.get("AGENT_WEIGHT_TECHNICAL", "0.3")),
-    "fundflow": float(CONFIG.get("AGENT_WEIGHT_FUND_FLOW", "1.8")),
+    "fundamental": float(CONFIG.get("AGENT_WEIGHT_FUNDAMENTAL", "1.5")),
+    "technical": float(CONFIG.get("AGENT_WEIGHT_TECHNICAL", "1.0")),
+    "fundflow": float(CONFIG.get("AGENT_WEIGHT_FUND_FLOW", "0.5")),
     "sentiment": float(CONFIG.get("AGENT_WEIGHT_SENTIMENT", "1.2")),
-    "shortterm": float(CONFIG.get("AGENT_WEIGHT_SHORTTERM", "1.4")),
+    "shortterm": float(CONFIG.get("AGENT_WEIGHT_SHORTTERM", "1.5")),
 }
 
 # ===== Tushare API 缓存层 =====
@@ -3253,17 +3253,18 @@ def push_feishu(results):
     """
     import requests
 
-    # 推送筛选
-    above_50 = sorted(
-        [r for r in results if r.get('total', 0) >= 50],
+    # 推送筛选 (V2.4: 阈值降至35，对应新权重)
+    THRESHOLD = 35
+    above_threshold = sorted(
+        [r for r in results if r.get('total', 0) >= THRESHOLD],
         key=lambda x: x.get('total', 0), reverse=True
     )[:3]
-    if above_50:
-        push_list = above_50
-        print(f"  推送池: {len(above_50)}只(综合分>=50前3)")
+    if above_threshold:
+        push_list = above_threshold
+        print(f"  推送池: {len(above_threshold)}只(综合分>={THRESHOLD}前3)")
     else:
         push_list = []
-        print(f"  无>=50分股票，不推送")
+        print(f"  无>={THRESHOLD}分股票，不推送")
 
     if not push_list:
         print("  无可推送股票")

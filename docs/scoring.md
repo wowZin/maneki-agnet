@@ -85,7 +85,7 @@ confidence = (technician_score × technician_weight
            / (technician_weight + fundamental_weight 
             + fund_flow_weight + sentiment_weight + shortterm_weight)
 
-默认权重: fundamental=0.5, technical=0.3, fundflow=1.8, sentiment=1.2, shortterm=1.4
+默认权重: fundamental=1.5, technical=1.0, fundflow=0.5, sentiment=1.2, shortterm=1.5
 ```
 
 ### V2.4 新增：Top-N 择优排序（可选）
