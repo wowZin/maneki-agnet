@@ -181,9 +181,10 @@ def list_to_dict(items, fields):
 
 # ===== 1. 扫描异动股 =====
 def scan_surge():
-    """通过东方财富clist API获取涨速异动股（requests+代理，替代CDP方案）
+    """通过东方财富clist API获取异动候选股（requests+代理，涨速+涨幅双路合并）
     
-    数据源: push2.eastmoney.com/api/qt/clist/get (fid=f11按5分钟涨速降序)
+    数据源: push2.eastmoney.com/api/qt/clist/get
+    双路: ①涨速降序(f11) ②涨幅降序(f3) → 合并去重
     Returns: list[dict] - [{code, name}] 候选股列表，或None
     """
     import re
@@ -193,45 +194,67 @@ def scan_surge():
         print(f"跳过扫描: 非交易时段 ({datetime.now().strftime('%H:%M')})")
         return None
     
-    api_url = (
+    base_url = (
         "https://push2.eastmoney.com/api/qt/clist/get?"
         "np=1&fltt=2&invt=2&"
         "fs=m:0+t:6+f:!2,m:0+t:80+f:!2,m:1+t:2+f:!2,m:1+t:23+f:!2,m:0+t:81+s:262144+f:!2&"
-        "fields=f12,f14,f2,f3,f11&"
-        "fid=f11&pn=1&pz=100&po=1&dect=1&"
+        "fields=f12,f14,f2,f3,f11&pn=1&pz=200&po=1&dect=1&"
         "ut=fa5fd1943c7b386f172d6893dbfba10b"
     )
     
+    def _fetch(fid):
+        """单次API请求，返回过滤后的候选股列表"""
+        url = f"{base_url}&fid={fid}"
+        proxies = get_proxies_dict()
+        resp = requests.get(url, proxies=proxies, timeout=15)
+        data = resp.json()
+        items = data.get("data", {}).get("diff", [])
+        if not items:
+            return []
+        candidates = []
+        for s in items:
+            code = s.get("f12", "")
+            name = s.get("f14", "")
+            pct = s.get("f3")
+            try:
+                pct = float(pct) if pct and pct != "-" else 0
+            except:
+                pct = 0
+            # 过滤: ST/新股/创业板/科创板，涨幅2%-9.5%
+            if re.search(r"ST|\*ST|退|N", name or ""):
+                continue
+            if re.match(r"^(300|301|688|8|4|920)", code):
+                continue
+            if pct < 2 or pct > 9.5:
+                continue
+            if "." not in code:
+                code = f"{code}.SH" if code.startswith("6") else f"{code}.SZ"
+            candidates.append({"code": code, "name": name})
+        return candidates
+    
     for attempt in range(3):
-        proxies = get_proxies_dict()  # 每次重试刷新代理（IP约2-3分钟过期）
         try:
-            resp = requests.get(api_url, proxies=proxies, timeout=15)
-            data = resp.json()
-            items = data.get("data", {}).get("diff", [])
-            if not items:
-                print(f"  扫描返回空数据(尝试{attempt+1}/3)")
+            # 双路扫描: 涨速+涨幅
+            surge_candidates = _fetch("f11")
+            pct_candidates = _fetch("f3")
+            
+            # 合并去重
+            seen = set()
+            merged = []
+            for c in surge_candidates + pct_candidates:
+                if c["code"] not in seen:
+                    seen.add(c["code"])
+                    merged.append(c)
+            
+            if not merged:
+                print(f"  双路扫描均返回空(尝试{attempt+1}/3)")
                 if attempt < 2:
                     time.sleep(2)
                     continue
                 return None
             
-            candidates = []
-            for s in items:
-                code = s.get("f12", "")
-                name = s.get("f14", "")
-                if re.search(r"ST|\*ST|退|N", name or ""):
-                    continue
-                if re.match(r"^(300|301|688|8|4|920)", code):
-                    continue
-                if "." not in code:
-                    if code.startswith("6"):
-                        code = f"{code}.SH"
-                    else:
-                        code = f"{code}.SZ"
-                candidates.append({"code": code, "name": name})
-            
-            print(f"扫描完成(requests+代理): {len(candidates)} 只候选股")
-            return candidates
+            print(f"扫描完成(涨速{len(surge_candidates)}+涨幅{len(pct_candidates)}→合并{len(merged)}只)")
+            return merged
             
         except Exception as e:
             print(f"  扫描失败(尝试{attempt+1}/3): {e}")
