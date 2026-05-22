@@ -333,7 +333,7 @@ def _stars(total: float) -> str:
     if total >= 50: return "⭐ ⭐ ⭐ ⭐ ⭐"
     if total >= 40: return "⭐ ⭐ ⭐ ⭐"
     if total >= 35: return "⭐ ⭐ ⭐"
-    return "不评级"
+    return "- 不评级"
 
 
 def _score_color(score: float) -> str:
