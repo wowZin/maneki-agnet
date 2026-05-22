@@ -81,6 +81,46 @@ def clear_tushare_cache():
     global _TUSHARE_CACHE
     _TUSHARE_CACHE = {}
 
+# ===== stock_basic 行业映射缓存（静态表，一次加载全量） =====
+_INDUSTRY_MAP = {}  # ts_code → industry
+_INDUSTRY_PEERS = {}  # industry → [ts_code, ...]
+
+def _ensure_industry_map():
+    """确保行业映射已加载（惰性初始化）"""
+    global _INDUSTRY_MAP, _INDUSTRY_PEERS
+    if _INDUSTRY_MAP:
+        return
+    try:
+        token = CONFIG.get("TUSHARE_TOKEN", "")
+        resp = call_tushare("stock_basic", token, {"list_status": "L"}, "ts_code,industry")
+        items = resp.get("data", {}).get("items", [])
+        for item in items:
+            if len(item) >= 2:
+                code, ind = item[0], (item[1] or '')
+                _INDUSTRY_MAP[code] = ind
+                if ind:
+                    _INDUSTRY_PEERS.setdefault(ind, []).append(code)
+        print(f"  行业映射缓存: {len(_INDUSTRY_MAP)}只股票, {len(_INDUSTRY_PEERS)}个行业")
+    except Exception as e:
+        print(f"  行业映射加载失败: {e}")
+
+def get_industry(code):
+    """获取个股所属行业"""
+    _ensure_industry_map()
+    return _INDUSTRY_MAP.get(code, '')
+
+def get_industry_peers(industry, limit=20):
+    """获取同行业股票列表"""
+    _ensure_industry_map()
+    peers = _INDUSTRY_PEERS.get(industry, [])
+    return peers[:limit]
+
+def clear_industry_cache():
+    """清空行业缓存（测试用）"""
+    global _INDUSTRY_MAP, _INDUSTRY_PEERS
+    _INDUSTRY_MAP = {}
+    _INDUSTRY_PEERS = {}
+
 # ===== 全局工具函数 =====
 def safe_float(val):
     """安全转换为float，失败返回0.0"""
@@ -1304,50 +1344,42 @@ def score_technical(code):
     sector_above_ma20_ratio = 0.5  # 中性的默认值
     
     try:
-        # 获取所属行业
-        resp_sector = call_tushare("stock_basic", token, {"ts_code": code}, "ts_code,industry")
-        sector_items = resp_sector.get("data", {}).get("items", [])
-        if sector_items:
-            sector_fields = resp_sector.get("data", {}).get("fields", [])
-            sector_dict = dict(zip(sector_fields, sector_items[0])) if sector_fields else {}
-            industry = str(sector_dict.get('industry', ''))
-            if industry:
-                # 获取行业内所有股票
-                resp_ind = call_tushare("stock_basic", token, {"industry": industry}, "ts_code")
-                ind_items = resp_ind.get("data", {}).get("items", [])
-                if ind_items and len(ind_items) > 1:
-                    above_ma20_count = 0
-                    total_count = 0
-                    # 只检查前20只减少API调用
-                    for ind_code_item in ind_items[:20]:
-                        ind_code = ind_code_item[0] if isinstance(ind_code_item, (list, tuple)) else ''
-                        if not ind_code:
-                            continue
-                        total_count += 1
-                        try:
-                            resp_daily = call_tushare("stk_factor_pro", token, {"ts_code": ind_code}, "trade_date,close,ma_bfq_20")
-                            d_items = resp_daily.get("data", {}).get("items", [])
-                            if d_items:
-                                d_fields = resp_daily.get("data", {}).get("fields", [])
-                                d_dict = dict(zip(d_fields, d_items[0])) if d_fields else {}
-                                d_close = safe_float(d_dict.get('close'))
-                                d_ma20 = safe_float(d_dict.get('ma_bfq_20'))
-                                if d_close and d_ma20 and d_close > d_ma20:
-                                    above_ma20_count += 1
-                        except:
-                            pass
-                    if total_count > 0:
-                        sector_above_ma20_ratio = above_ma20_count / total_count
-                        
-                        if sector_above_ma20_ratio >= 0.4:
-                            sector_score += 5
-                            sector_reasons.append(f"板块共振({sector_above_ma20_ratio*100:.0f}%>MA20)+5")
-                        elif sector_above_ma20_ratio >= 0.2:
-                            sector_score += 2
-                            sector_reasons.append(f"板块中性({sector_above_ma20_ratio*100:.0f}%>MA20)+2")
-                        else:
-                            # 板块弱势天花板：总分上限74
-                            sector_reasons.append(f"板块弱势(<20%>MA20)天花板74分")
+        # 获取所属行业（从缓存映射，避免逐只调stock_basic）
+        industry = get_industry(code)
+        if industry:
+            # 获取同行业股票（客户端过滤，Tushare stock_basic不支持industry参数）
+            ind_codes = get_industry_peers(industry, limit=20)
+            if ind_codes and len(ind_codes) > 1:
+                above_ma20_count = 0
+                total_count = 0
+                for ind_code in ind_codes:
+                    if not ind_code:
+                        continue
+                    total_count += 1
+                    try:
+                        resp_daily = call_tushare("stk_factor_pro", token, {"ts_code": ind_code}, "trade_date,close,ma_bfq_20")
+                        d_items = resp_daily.get("data", {}).get("items", [])
+                        if d_items:
+                            d_fields = resp_daily.get("data", {}).get("fields", [])
+                            d_dict = dict(zip(d_fields, d_items[0])) if d_fields else {}
+                            d_close = safe_float(d_dict.get('close'))
+                            d_ma20 = safe_float(d_dict.get('ma_bfq_20'))
+                            if d_close and d_ma20 and d_close > d_ma20:
+                                above_ma20_count += 1
+                    except:
+                        pass
+                if total_count > 0:
+                    sector_above_ma20_ratio = above_ma20_count / total_count
+                    
+                    if sector_above_ma20_ratio >= 0.4:
+                        sector_score += 5
+                        sector_reasons.append(f"板块共振({sector_above_ma20_ratio*100:.0f}%>MA20)+5")
+                    elif sector_above_ma20_ratio >= 0.2:
+                        sector_score += 2
+                        sector_reasons.append(f"板块中性({sector_above_ma20_ratio*100:.0f}%>MA20)+2")
+                    else:
+                        # 板块弱势天花板：总分上限74
+                        sector_reasons.append(f"板块弱势(<20%>MA20)天花板74分")
     except:
         pass
     
