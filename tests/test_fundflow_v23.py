@@ -13,7 +13,7 @@ import tushare as ts
 ts.set_token(os.getenv("TUSHARE_TOKEN", ""))
 pro = ts.pro_api()
 
-from zt_pipeline import score_fundflow, _get_akshare_fund_flow, call_tushare, safe_float
+from zt_pipeline import score_fundflow, call_tushare, safe_float
 
 
 def test_v23_veto4_3day_exemption():
