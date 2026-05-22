@@ -161,53 +161,7 @@ def _get_realtime_quote(code: str) -> dict:
             markets = [("m:0+t:6", "SZ主板"), ("m:0+t:80", "SZ创业板")]
             base = 0
 
-        # 获取代理session
-        sess = get_requests_session_with_proxy()
-        if sess is None:
-            sess = _req.Session()
-            sess.headers.update({"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-                                 "Referer": "https://quote.eastmoney.com/"})
-        # 确保 session 有代理配置
-        if not sess.proxies:
-            from proxy_utils import get_proxies_dict
-            proxies = get_proxies_dict()
-            if proxies:
-                sess.proxies = proxies
-
-        for fs, label in markets:
-            # 先拿总页数
-            try:
-                resp = sess.get(
-                    f"https://push2.eastmoney.com/api/qt/clist/get?"
-                    f"np=1&fltt=2&invt=2&fs={fs}&fields=f12&pn=1&pz=1&po=0",
-                    timeout=5
-                )
-                total_count = resp.json().get("data", {}).get("total", 0)
-                total_pages = (total_count // 100) + 1
-            except Exception:
-                total_pages = 20  # fallback
-
-            for pn in range(1, total_pages + 1):
-                url = (
-                    f"https://push2.eastmoney.com/api/qt/clist/get?"
-                    f"np=1&fltt=2&invt=2&fs={fs}&fields=f2,f3,f12,f14&pn={pn}&pz=100&po=0"
-                )
-                for retry in range(2):
-                    try:
-                        resp = sess.get(url, timeout=8)
-                        items = resp.json().get("data", {}).get("diff", [])
-                        for item in items:
-                            if item.get("f12") == raw:
-                                return {"price": item.get("f2", 0) or 0, "change_pct": item.get("f3", 0) or 0}
-                        break
-                    except Exception:
-                        if retry == 0:
-                            from proxy_utils import get_proxy_ip
-                            new_addr = get_proxy_ip(force_refresh=True)
-                            if new_addr:
-                                sess.proxies = {"http": f"http://{new_addr}", "https": f"http://{new_addr}"}
-                            continue
-                        break
+        # 盘后代理不稳定，bot跳过实时行情（不影响核心打分）
         return {"price": 0, "change_pct": 0}
     except Exception as e:
         print(f"  [实时行情] {code} 获取失败: {e}")
