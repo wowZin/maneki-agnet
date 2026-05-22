@@ -3179,6 +3179,13 @@ def score_sentiment(code):
         score = round(score * discount)
         reasons.append(f"[折扣]连板{stock_continuity}板×{discount} {score_before}→{score}")
     
+    # V2.4: 今日涨停情绪保底 — 实时涨幅>=9.5%但情绪分偏低时补分
+    if stock_pct >= 9.5 and score < 30:
+        boost = min(15, 30 - score)
+        if boost > 0:
+            score += boost
+            reasons.append(f"[今日涨停%]情绪保底+{boost}")
+    
     # ===== 4. 综合评定 =====
     final_score = max(0, min(100, score))
     
