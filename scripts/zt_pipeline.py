@@ -2396,7 +2396,7 @@ def _get_popularity_rank(code: str) -> int | None:
             from scripts import proxy_utils as _pu
             proxies = _pu.get_proxies_dict() if _pu.is_proxy_enabled() else None
             cache = {}
-            for pg in range(1, 4):
+            for pg in range(1, 3):
                 url = (
                     "https://push2.eastmoney.com/api/qt/clist/get?"
                     "np=1&fltt=2&invt=2&"
@@ -2849,10 +2849,10 @@ def score_sentiment(code):
     
     if stock_pct < 3:
         return 0, f"纯跟风弱势:涨幅仅{stock_pct:.1f}%<3%"
-    elif is_main_theme and popularity_rank is not None and popularity_rank > 300:
-        return 0, f"纯跟风弱势:主线题材但人气仅{popularity_rank}名>300"
-    elif not is_main_theme and popularity_rank is not None and popularity_rank > 300:
-        return 0, f"纯跟风弱势:非主线且人气{popularity_rank}名>300"
+    elif is_main_theme and popularity_rank is not None and popularity_rank > 200:
+        return 0, f"纯跟风弱势:主线题材但人气仅{popularity_rank}名>200"
+    elif not is_main_theme and popularity_rank is not None and popularity_rank > 200:
+        return 0, f"纯跟风弱势:非主线且人气{popularity_rank}名>200"
     
     # ===== 3. 五维度评分 =====
     score = 0
