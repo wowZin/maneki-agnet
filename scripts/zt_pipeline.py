@@ -3209,7 +3209,7 @@ def push_feishu(results):
 
     for r in push_list:
         s = r.get('scores', {})
-        top3_tag = f" | Top3:**{r.get('top3_score',0):.1f}**" if r.get('top3_score') else ""
+        top3_tag = f" | Top3:**{r.get('top3_score',0):.1f}**" if r.get('top3_score') is not None else ""
         element = {
             "tag": "div",
             "text": {
