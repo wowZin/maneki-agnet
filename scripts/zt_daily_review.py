@@ -40,6 +40,26 @@ FEISHU_APP_SECRET = CONFIG.get("FEISHU_APP_SECRET", "")
 FEISHU_CHAT_ID_REPORT = CONFIG.get("FEISHU_CHAT_ID_REPORT", "")
 FEISHU_TEST_MODE = CONFIG.get("FEISHU_TEST_MODE", "").lower() == "true"
 
+# ===== 权重AB对比配置 =====
+# 当前权重（从.env读取，和zt_pipeline.py一致）
+CURRENT_WEIGHTS = {
+    "fundamental": float(CONFIG.get("AGENT_WEIGHT_FUNDAMENTAL", "1.5")),
+    "technical": float(CONFIG.get("AGENT_WEIGHT_TECHNICAL", "1.0")),
+    "fundflow": float(CONFIG.get("AGENT_WEIGHT_FUND_FLOW", "0.5")),
+    "sentiment": float(CONFIG.get("AGENT_WEIGHT_SENTIMENT", "1.2")),
+    "shortterm": float(CONFIG.get("AGENT_WEIGHT_SHORTTERM", "1.5")),
+}
+# 旧权重（权重变更后填入上一版权重，相同时AB不生效）
+PREV_WEIGHTS = {
+    "fundamental": float(CONFIG.get("AGENT_WEIGHT_FUNDAMENTAL_PREV", "1.5")),
+    "technical": float(CONFIG.get("AGENT_WEIGHT_TECHNICAL_PREV", "1.0")),
+    "fundflow": float(CONFIG.get("AGENT_WEIGHT_FUND_FLOW_PREV", "0.5")),
+    "sentiment": float(CONFIG.get("AGENT_WEIGHT_SENTIMENT_PREV", "1.2")),
+    "shortterm": float(CONFIG.get("AGENT_WEIGHT_SHORTTERM_PREV", "1.5")),
+}
+# AB是否生效：只有当前权重≠旧权重时才对比
+AB_ENABLED = CURRENT_WEIGHTS != PREV_WEIGHTS
+
 def feishu_title_prefix():
     """测试模式下返回'测试-'前缀"""
     return "测试-" if FEISHU_TEST_MODE else ""
@@ -449,7 +469,59 @@ def confidence_distribution(analysis_results: list) -> dict:
             dist["low"] += 1
     return dist
 
-# ===== 8. 飞书推送 =====
+# ===== 8. 权重AB对比 =====
+def compute_ab_comparison(all_analysis: list, limit_ups: list) -> dict:
+    """用新旧两套权重分别计算推送池并对比命中率（纯数学，零API）"""
+    if not AB_ENABLED:
+        return {"enabled": False, "note": "当前权重与旧权重相同，AB不生效"}
+
+    def weighted_total(scores, weights):
+        w_sum = sum(weights.values())
+        return sum(scores.get(d, 0) * weights[d] for d in weights) / w_sum if w_sum > 0 else 0
+
+    THRESHOLD = 35
+
+    # 旧权重推送
+    prev_pushed = []
+    for item in all_analysis:
+        s = item.get("scores", {})
+        if s:
+            item["_prev_total"] = weighted_total(s, PREV_WEIGHTS)
+    prev_candidates = [item for item in all_analysis if item.get("_prev_total", 0) >= THRESHOLD]
+    prev_candidates.sort(key=lambda x: x.get("_prev_total", 0), reverse=True)
+    prev_pushed = prev_candidates[:3]
+
+    # 新权重推送（从pushed记录取，或同上计算）
+    curr_pushed = []
+    for item in all_analysis:
+        s = item.get("scores", {})
+        if s:
+            item["_curr_total"] = weighted_total(s, CURRENT_WEIGHTS)
+    curr_candidates = [item for item in all_analysis if item.get("_curr_total", 0) >= THRESHOLD]
+    curr_candidates.sort(key=lambda x: x.get("_curr_total", 0), reverse=True)
+    curr_pushed = curr_candidates[:3]
+
+    actual_set = set(limit_ups)
+    prev_codes = set(p.get("code", "") for p in prev_pushed)
+    curr_codes = set(p.get("code", "") for p in curr_pushed)
+
+    return {
+        "enabled": True,
+        "prev": {
+            "weights": PREV_WEIGHTS,
+            "pushed": len(prev_codes),
+            "codes": list(prev_codes),
+            "hits": len(prev_codes & actual_set),
+        },
+        "curr": {
+            "weights": CURRENT_WEIGHTS,
+            "pushed": len(curr_codes),
+            "codes": list(curr_codes),
+            "hits": len(curr_codes & actual_set),
+        },
+    }
+
+# ===== 9. 飞书推送 =====
 def send_feishu_report(report: dict):
     """发送飞书卡片消息"""
     # 获取token
@@ -519,12 +591,23 @@ def send_feishu_report(report: dict):
                 ]
             },
             {"tag": "hr"},
-            {
-                "tag": "div",
-                "text": {"tag": "lark_md", "content": f"**置信度分布**: 高(≥40): {report['confidence_dist']['high']} | 中(25-40): {report['confidence_dist']['medium']} | 低(<25): {report['confidence_dist']['low']}"}
+            {"tag": "div",
+                "text": {"tag": "lark_md", "content": f"**置信度分布**: 高(>=40): {report['confidence_dist']['high']} | 中(25-40): {report['confidence_dist']['medium']} | 低(<25): {report['confidence_dist']['low']}"}
             }
         ]
     }
+    # AB段（仅权重变更时显示）
+    ab = report.get('ab_comparison', {})
+    if ab.get('enabled'):
+        prev = ab['prev']
+        curr = ab['curr']
+        prev_rate = prev['hits'] / prev['pushed'] * 100 if prev['pushed'] else 0
+        curr_rate = curr['hits'] / curr['pushed'] * 100 if curr['pushed'] else 0
+        verdict = '新权重更优' if curr_rate > prev_rate else ('旧权重更优' if prev_rate > curr_rate else '持平')
+        card["elements"].extend([
+            {"tag": "hr"},
+            {"tag": "div", "text": {"tag": "lark_md", "content": f"**权重AB对比**\\n旧: 推送{prev['pushed']}只 命中{prev['hits']}只 ({prev_rate:.0f}%)\\n新: 推送{curr['pushed']}只 命中{curr['hits']}只 ({curr_rate:.0f}%)\\n结论: {verdict}"}}
+        ])
     
     # 发送消息
     msg_url = "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id"
@@ -736,8 +819,17 @@ def main():
 
     # Step 8: 置信度分布（基于推送股票，而非全量分析）
     conf_dist = confidence_distribution(pushed_analysis)
+
+    # Step 9: 权重AB对比（全量分析 vs 涨停名单）
+    ab_result = compute_ab_comparison(all_analysis, limit_ups)
+    if ab_result.get("enabled"):
+        prev_hit_rate = ab_result["prev"]["hits"] / ab_result["prev"]["pushed"] * 100 if ab_result["prev"]["pushed"] else 0
+        curr_hit_rate = ab_result["curr"]["hits"] / ab_result["curr"]["pushed"] * 100 if ab_result["curr"]["pushed"] else 0
+        print(f"权重AB: 旧={prev_hit_rate:.0f}% 新={curr_hit_rate:.0f}%")
+    else:
+        print(f"权重AB: {ab_result.get('note', '未启用')}")
     
-    # Step 9: 生成报告
+    # Step 10: 生成报告
     report = {
         "date": today,
         "pushed_count": hits["pushed_count"],
@@ -751,7 +843,8 @@ def main():
         "miss_codes": hits.get("miss_codes", []),
         "hit_details": hits.get("hit_details", []),
         "dim_performance": dim_perf,
-        "confidence_dist": conf_dist
+        "confidence_dist": conf_dist,
+        "ab_comparison": ab_result,  # V2.4 权重AB
     }
     
     # 保存JSON报告（保留用于程序读取）
