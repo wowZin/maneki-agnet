@@ -46,7 +46,7 @@ def feishu_title_prefix():
 AGENT_WEIGHTS = {
     "fundamental": float(CONFIG.get("AGENT_WEIGHT_FUNDAMENTAL", "1.5")),
     "technical": float(CONFIG.get("AGENT_WEIGHT_TECHNICAL", "1.0")),
-    "fundflow": float(CONFIG.get("AGENT_WEIGHT_FUND_FLOW", "0.5")),
+    "fundflow": float(CONFIG.get("AGENT_WEIGHT_FUND_FLOW", "1.0")),
     "sentiment": float(CONFIG.get("AGENT_WEIGHT_SENTIMENT", "1.2")),
     "shortterm": float(CONFIG.get("AGENT_WEIGHT_SHORTTERM", "1.5")),
 }
