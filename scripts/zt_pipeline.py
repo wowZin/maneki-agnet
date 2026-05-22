@@ -3208,11 +3208,13 @@ def push_feishu(results):
     }
 
     for r in push_list:
+        s = r.get('scores', {})
+        top3_tag = f" | Top3:**{r.get('top3_score',0):.1f}**" if r.get('top3_score') else ""
         element = {
             "tag": "div",
             "text": {
                 "tag": "lark_md",
-                "content": f"**{r['code']} {r['name']}** | 综合: **{r['total']:.1f}**\n基本面:{r['scores']['fundamental']} | 技术面:{r['scores']['technical']} | 资金面:{r['scores']['fundflow']} | 情绪面:{r['scores']['sentiment']}"
+                "content": f"**{r['code']} {r['name']}** | 综合:**{r['total']:.1f}**{top3_tag}\n基本面:{s.get('fundamental',0):.0f} | 技术面:{s.get('technical',0):.0f} | 资金面:{s.get('fundflow',0):.0f} | 情绪面:{s.get('sentiment',0):.0f} | 短线:{s.get('shortterm',0):.0f}"
             }
         }
         card["elements"].append(element)
@@ -3371,13 +3373,19 @@ def main():
             "top3_score": round(top3_score, 1),  # V2.4
         })
     
-    # 排序
-    results.sort(key=lambda x: x["total"], reverse=True)
+    # 排序（双排序输出）
+    by_weighted = sorted(results, key=lambda x: x["total"], reverse=True)
+    by_top3 = sorted(results, key=lambda x: x.get("top3_score", 0), reverse=True)
     
-    print("\n[排序结果]")
-    for i, r in enumerate(results, 1):
+    print("\n[排序结果 加权总分]")
+    for i, r in enumerate(by_weighted, 1):
         resonance_tag = " [共振]" if r.get("resonance", {}).get("is_resonance") else ""
-        print(f"  {i}. {r['code']} {r['name']} - 综合:{r['total']:.1f}{resonance_tag}")
+        print(f"  {i}. {r['code']} {r['name']} - 加权:{r['total']:.1f} Top3:{r.get('top3_score',0):.1f}{resonance_tag}")
+    
+    print("\n[排序结果 Top3择优]")
+    for i, r in enumerate(by_top3, 1):
+        resonance_tag = " [共振]" if r.get("resonance", {}).get("is_resonance") else ""
+        print(f"  {i}. {r['code']} {r['name']} - Top3:{r.get('top3_score',0):.1f} 加权:{r['total']:.1f}{resonance_tag}")
     
     # 保存结果
     output_dir = PROJECT_DIR / "data" / "analysis"

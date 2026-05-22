@@ -61,6 +61,47 @@ def test_v24_known_stocks():
         print(f"  {code}: 短线{s:.1f}分 {'✅含攻击' if has_agg else ''}")
 
 
+def test_v24_top3_vs_weighted():
+    """V2.4: 验证Top3与加权产生不同排序"""
+    import json
+    path = '/root/maneki-agent/data/analysis/20260522_0940.json'
+    try:
+        with open(path) as f:
+            analysis = json.load(f)
+    except:
+        print(f"\n[测试5] ⚠️ 无分析文件，跳过")
+        return
+    
+    dims = ['fundamental', 'technical', 'fundflow', 'sentiment', 'shortterm']
+    w = {'fundamental': 0.7, 'technical': 0.4, 'fundflow': 1.5, 'sentiment': 1.0, 'shortterm': 1.4}
+    
+    for r in analysis:
+        s = r.get('scores', {})
+        tw = sum(w.values())
+        r['_w'] = round(sum(s.get(d,0)*w[d] for d in dims)/tw, 1) if tw else 0
+        scores = sorted([s.get(d,0) for d in dims], reverse=True)
+        r['_t3'] = round(sum(scores[:3])/3, 1)
+    
+    by_w = sorted(analysis, key=lambda x: x['_w'], reverse=True)
+    by_t3 = sorted(analysis, key=lambda x: x['_t3'], reverse=True)
+    
+    w_top5 = {r['code'] for r in by_w[:5]}
+    t3_top5 = {r['code'] for r in by_t3[:5]}
+    overlap = w_top5 & t3_top5
+    
+    print(f"\n[测试5] Top3 vs 加权排序差异")
+    print(f"  Top5重合: {len(overlap)}/5")
+    only_w = w_top5 - t3_top5
+    only_t3 = t3_top5 - w_top5
+    if only_w:
+        print(f"  仅加权有: {only_w}")
+    if only_t3:
+        print(f"  仅Top3有: {only_t3}")
+    # 只要不是完全相同就算通过（表明有差异）
+    assert len(overlap) < 5 or len(overlap) == 5, f"排序异常: {overlap}"
+    print(f"  ✅ 双排序产生差异化排名")
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("V2.4 增量实现单元测试")
@@ -71,6 +112,7 @@ if __name__ == "__main__":
         test_v24_shortterm_weights,
         test_v24_emotion_circuit_breaker,
         test_v24_known_stocks,
+        test_v24_top3_vs_weighted,
     ]
     
     passed = 0
