@@ -1606,7 +1606,7 @@ def score_fundflow(code):
                 main_ratio_for_dim1 = main_ratio
                 if main_ratio < 5:
                     if net_3d_for_veto4 <= 0:
-                        veto_flags.append(f"纯散户博弈[T-1]:主力净占比{main_ratio:.1f}%<5%+3日累计净流入{net_3d_for_veto4:.0f}≤0")
+                        veto_flags.append(f"纯散户博弈[T-1]:主力净占比{main_ratio:.1f}%<5%+3日累计净流入{net_3d_for_veto4:.0f}万≤0")
                     else:
                         dim1_veto4_deduction = -5  # V2.3: 豁免否决，转入维度1扣分
     elif is_yiziban:
