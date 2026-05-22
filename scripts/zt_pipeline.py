@@ -2429,7 +2429,7 @@ def score_sentiment(code):
     except:
         pass
     
-    # 构建概念→涨停家数映射
+    # 构建概念→涨停家数映射（含模糊匹配：consum电子 vs consum电子概念）
     concept_ul_cnt = {}
     if cpt_data:
         for cpt in cpt_data:
@@ -2437,6 +2437,15 @@ def score_sentiment(code):
             up_nums = safe_int(cpt.get('up_nums', 0)) or 0
             if cpt_name and up_nums > 0:
                 concept_ul_cnt[cpt_name] = up_nums
+    
+    def _get_ul_cnt(concept_name):
+        """模糊匹配概念涨停数：处理'消费电子'vs'消费电子概念'类差异"""
+        if concept_name in concept_ul_cnt:
+            return concept_ul_cnt[concept_name]
+        for k, v in concept_ul_cnt.items():
+            if concept_name in k or k in concept_name:
+                return v
+        return 0
     # 补充：用涨停数据按行业统计（备选）
     if limit_data:
         for item in limit_data:
@@ -2582,7 +2591,7 @@ def score_sentiment(code):
     # 否决2(主线崩塌)：核心龙头断板 或 所属题材无涨停
     # T+1场景简化：概念涨停数=0视为主线崩塌（=1留给否决5纯跟风）
     if concept_names and cpt_data:
-        max_ul = max([concept_ul_cnt.get(n, 0) for n in concept_names], default=0)
+        max_ul = max([_get_ul_cnt(n) for n in concept_names], default=0)
         if max_ul == 0 and len(concept_names) > 0:
             return 0, f"主线崩塌:所属概念无涨停"
     
@@ -2756,7 +2765,7 @@ def score_sentiment(code):
     # 判断是否主线题材（用概念涨停数代理：≥3只涨停=主线）
     is_main_theme = False
     if concept_names and cpt_data:
-        max_ul = max([concept_ul_cnt.get(n, 0) for n in concept_names], default=0)
+        max_ul = max([_get_ul_cnt(n) for n in concept_names], default=0)
         is_main_theme = max_ul >= 3
     
     if stock_pct < 3:
