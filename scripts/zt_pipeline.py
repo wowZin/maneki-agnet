@@ -2334,6 +2334,7 @@ def score_fundflow(code):
 # V2.4: 实时涨幅缓存（CDP/requests+代理获取，避免盘中Tushare无数据）
 _REALTIME_PCT_CACHE = {}
 _REALTIME_PCT_TS = ""
+_POPULARITY_RANK_CACHE = {}  # {code: rank} 东方财富人气排名，取前300
 
 
 def _batch_fetch_realtime_pct():
@@ -2379,6 +2380,50 @@ def _batch_fetch_realtime_pct():
     except Exception as e:
         print(f"  实时涨幅获取失败: {e}")
     return {}
+
+
+def _get_popularity_rank(code: str) -> int | None:
+    """获取个股东方财富人气排名（f62关注度降序，取前300名）
+    
+    返回排名(1-based)或None(获取失败/不在前300)
+    """
+    global _POPULARITY_RANK_CACHE, _REALTIME_PCT_TS
+    from datetime import datetime as _dt
+    today = _dt.now().strftime("%Y%m%d")
+    if _REALTIME_PCT_TS != today or not _POPULARITY_RANK_CACHE:
+        try:
+            import requests as _req
+            from scripts import proxy_utils as _pu
+            proxies = _pu.get_proxies_dict() if _pu.is_proxy_enabled() else None
+            cache = {}
+            for pg in range(1, 4):
+                url = (
+                    "https://push2.eastmoney.com/api/qt/clist/get?"
+                    "np=1&fltt=2&invt=2&"
+                    "fs=m:0+t:6+f:!2,m:0+t:80+f:!2,m:1+t:2+f:!2,m:1+t:23+f:!2&"
+                    f"fields=f12,f62&fid=f62&pn={pg}&pz=100&po=1&"
+                    "ut=fa5fd1943c7b386f172d6893dbfba10b"
+                )
+                r2 = _req.get(url, proxies=proxies, timeout=8)
+                items2 = r2.json().get("data", {}).get("diff", [])
+                if not items2:
+                    break
+                for rank, item in enumerate(items2, 1 + (pg - 1) * 100):
+                    c = str(item.get("f12", ""))
+                    if c:
+                        cache[c] = rank
+                if len(items2) < 100:
+                    break
+            if cache:
+                _POPULARITY_RANK_CACHE = cache
+                _REALTIME_PCT_TS = today
+                print(f"  人气排名缓存: {len(cache)} 只 (前{len(cache)})")
+        except Exception as e:
+            print(f"  人气排名获取失败: {e}")
+            return None
+    
+    code_short = code.split('.')[0]
+    return _POPULARITY_RANK_CACHE.get(code_short)
 
 
 def score_sentiment(code):
@@ -2750,7 +2795,7 @@ def score_sentiment(code):
     # V2.3: 否决5 — 纯跟风弱势
     # 数据源：东方财富个股人气榜（无法获取时，降级为仅检查涨幅）
     # Null处理：跳过人气排名检查
-    popularity_rank = None  # 无真实人气数据，跳过排名检查
+    popularity_rank = _get_popularity_rank(code)  # V2.4: 真实人气排名
     
     # 获取个股当日涨幅（V2.4: 优先实时缓存 > 个股实时接口 > Tushare日线 > limit_data）
     stock_pct = 0
@@ -3178,13 +3223,6 @@ def score_sentiment(code):
         score_before = score
         score = round(score * discount)
         reasons.append(f"[折扣]连板{stock_continuity}板×{discount} {score_before}→{score}")
-    
-    # V2.4: 今日涨停情绪保底 — 实时涨幅>=9.5%但情绪分偏低时补分
-    if stock_pct >= 9.5 and score < 30:
-        boost = min(15, 30 - score)
-        if boost > 0:
-            score += boost
-            reasons.append(f"[今日涨停%]情绪保底+{boost}")
     
     # ===== 4. 综合评定 =====
     final_score = max(0, min(100, score))
