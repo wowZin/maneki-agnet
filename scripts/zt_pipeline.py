@@ -44,11 +44,11 @@ def feishu_title_prefix():
 
 # ===== Agent 权重配置（从.env读取，默认=1） =====
 AGENT_WEIGHTS = {
-    "fundamental": float(CONFIG.get("AGENT_WEIGHT_FUNDAMENTAL", "1")),
-    "technical": float(CONFIG.get("AGENT_WEIGHT_TECHNICAL", "1")),
-    "fundflow": float(CONFIG.get("AGENT_WEIGHT_FUND_FLOW", "1")),
-    "sentiment": float(CONFIG.get("AGENT_WEIGHT_SENTIMENT", "1")),
-    "shortterm": float(CONFIG.get("AGENT_WEIGHT_SHORTTERM", "1")),
+    "fundamental": float(CONFIG.get("AGENT_WEIGHT_FUNDAMENTAL", "0.5")),
+    "technical": float(CONFIG.get("AGENT_WEIGHT_TECHNICAL", "0.3")),
+    "fundflow": float(CONFIG.get("AGENT_WEIGHT_FUND_FLOW", "1.8")),
+    "sentiment": float(CONFIG.get("AGENT_WEIGHT_SENTIMENT", "1.2")),
+    "shortterm": float(CONFIG.get("AGENT_WEIGHT_SHORTTERM", "1.4")),
 }
 
 # ===== Tushare API 缓存层 =====
@@ -2814,8 +2814,8 @@ def score_sentiment(code):
         return 0, f"纯跟风弱势:涨幅仅{stock_pct:.1f}%<3%"
     elif is_main_theme and popularity_rank > 300:
         return 0, f"纯跟风弱势:主线题材但人气仅{popularity_rank}名>300"
-    elif not is_main_theme and popularity_rank > 150:
-        return 0, f"纯跟风弱势:非主线且人气{popularity_rank}名>150"
+    elif not is_main_theme and popularity_rank > 300:
+        return 0, f"纯跟风弱势:非主线且人气{popularity_rank}名>300"
     
     # ===== 3. 五维度评分 =====
     score = 0
