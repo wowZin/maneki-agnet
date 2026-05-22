@@ -2330,6 +2330,57 @@ def score_fundflow(code):
     
     return final_score, f"[{level}] " + "; ".join(reason)
 
+
+# V2.4: 实时涨幅缓存（CDP/requests+代理获取，避免盘中Tushare无数据）
+_REALTIME_PCT_CACHE = {}
+_REALTIME_PCT_TS = ""
+
+
+def _batch_fetch_realtime_pct():
+    """批量获取全市场实时涨跌幅，缓存到全局变量"""
+    import requests as _req
+    global _REALTIME_PCT_CACHE, _REALTIME_PCT_TS
+    from datetime import datetime as _dt
+    today = _dt.now().strftime("%Y%m%d")
+    if _REALTIME_PCT_TS == today and _REALTIME_PCT_CACHE:
+        return _REALTIME_PCT_CACHE
+    
+    try:
+        from scripts import proxy_utils as _pu
+        proxies = _pu.get_proxies_dict() if _pu.is_proxy_enabled() else None
+        cache = {}
+        # 逐页获取（每页最多100只，翻页至获取5000+）
+        for page in range(1, 6):  # 最多5页，覆盖500只活跃股
+            url = (
+                "https://push2.eastmoney.com/api/qt/clist/get?"
+                "np=1&fltt=2&invt=2&"
+                "fs=m:0+t:6+f:!2,m:0+t:80+f:!2,m:1+t:2+f:!2,m:1+t:23+f:!2,m:0+t:81+s:262144+f:!2&"
+                f"fields=f12,f3&fid=f3&pn={page}&pz=100&po=0&dect=1&"
+                "ut=fa5fd1943c7b386f172d6893dbfba10b"
+            )
+            resp = _req.get(url, proxies=proxies, timeout=10)
+            data = resp.json()
+            items = data.get("data", {}).get("diff", [])
+            if not items:
+                break
+            for item in items:
+                code = str(item.get("f12", ""))
+                pct = item.get("f3")
+                if code and pct is not None:
+                    cache[code] = pct
+            if len(items) < 100:
+                break  # 最后一页
+        
+        if cache:
+            _REALTIME_PCT_CACHE = cache
+            _REALTIME_PCT_TS = today
+            print(f"  实时涨幅缓存: {len(cache)} 只股票")
+            return cache
+    except Exception as e:
+        print(f"  实时涨幅获取失败: {e}")
+    return {}
+
+
 def score_sentiment(code):
     """
     情绪面涨停潜力预判 V2.3
@@ -2725,19 +2776,26 @@ def score_sentiment(code):
     except:
         pass
     
-    # 获取个股当日涨幅（从个股日线数据获取，不依赖全市场涨停列表）
+    # 获取个股当日涨幅（V2.4: 优先实时缓存 > Tushare日线 > limit_data）
     stock_pct = 0
-    try:
-        resp_stock = call_tushare("daily", token, {
-            "ts_code": code,
-            "start_date": today_str,
-            "end_date": today_str
-        }, "trade_date,pct_change")
-        stock_items = resp_stock.get("data", {}).get("items", [])
-        if stock_items:
-            stock_pct = safe_float(stock_items[0][1]) or 0
-    except:
-        pass
+    # V2.4: 盘中优先使用实时数据缓存
+    code_short = code.split('.')[0]
+    realtime_cache = _batch_fetch_realtime_pct()
+    if code_short in realtime_cache:
+        stock_pct = realtime_cache[code_short] or 0
+    
+    if stock_pct == 0:
+        try:
+            resp_stock = call_tushare("daily", token, {
+                "ts_code": code,
+                "start_date": today_str,
+                "end_date": today_str
+            }, "trade_date,pct_change")
+            stock_items = resp_stock.get("data", {}).get("items", [])
+            if stock_items:
+                stock_pct = safe_float(stock_items[0][1]) or 0
+        except:
+            pass
     
     # 从limit_data也尝试找（盘中场景）
     if limit_data:
