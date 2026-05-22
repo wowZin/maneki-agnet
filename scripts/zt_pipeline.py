@@ -1018,6 +1018,13 @@ def score_technical(code):
     close = safe_float(today.get('close'))
     ma20 = safe_float(today.get('ma_bfq_20'))
     vol_ratio = safe_float(today.get('vol_ratio'))
+    # V2.4: 盘中优先使用东财实时量比(替代T-1)
+    if is_trading_time():
+        fund_cache = _get_realtime_fund_cache()
+        code_short = code.split('.')[0]
+        rt = fund_cache.get(code_short, {})
+        if rt.get('vol_ratio', 0) > 0:
+            vol_ratio = rt['vol_ratio']
     boll_mid = safe_float(today.get('boll_mid_bfq'))
     
     # ===== 2. V2.0 一票否决检查 =====
@@ -1705,8 +1712,24 @@ def score_fundflow(code):
     dim1_score = 0
     dim1_reason = []
     
-    # --- 规模阈值因子(15分)：主力净流入占流通市值比例（Tushare T+1）---
-    if moneyflow_data and daily_basic_data:
+    # --- 规模阈值因子(15分)：主力净流入占成交额比例 ---
+    # 优先实时(Eastmoney f62)，降级 Tushare T+1
+    fund_cache = _get_realtime_fund_cache()
+    code_short = code.split('.')[0]
+    rt_data = fund_cache.get(code_short, {})
+    rt_net_flow = rt_data.get("net_flow", 0)
+    rt_amount = rt_data.get("amount", 0)
+    
+    if rt_amount > 0:
+        rt_net_ratio = rt_net_flow / rt_amount * 100
+        if rt_net_ratio >= 3:
+            dim1_score += 15
+            dim1_reason.append(f"主力净流入[实时]{rt_net_ratio:.1f}%+15")
+        elif rt_net_ratio < 0.1:
+            dim1_score -= 15
+            dim1_reason.append(f"主力净流入[实时]{rt_net_ratio:.1f}%-15")
+    elif moneyflow_data and daily_basic_data:
+        # 降级 Tushare T+1
         latest = moneyflow_data[0]
         buy_elg = safe_float(latest.get("buy_elg_amount", 0))
         sell_elg = safe_float(latest.get("sell_elg_amount", 0))
@@ -2237,6 +2260,74 @@ def _get_popularity_rank(code: str) -> int | None:
     
     code_short = code.split('.')[0]
     return _POPULARITY_RANK_CACHE.get(code_short)
+
+# V2.4: 实时资金流缓存（东财API+代理，替代T+1 Tushare moneyflow）
+_REALTIME_FUND_CACHE = {}  # code_short → {net_flow, vol_ratio, turnover, amount}
+_REALTIME_FUND_TS = ""
+
+def _get_realtime_fund_cache():
+    """获取全市场实时资金流数据（带缓存，每轮pipeline只调一次）
+    返回: {code_short: {net_flow(元), vol_ratio, turnover(%), amount(元)}}
+    """
+    global _REALTIME_FUND_CACHE, _REALTIME_FUND_TS
+    today = datetime.now().strftime("%Y%m%d")
+    if _REALTIME_FUND_CACHE and _REALTIME_FUND_TS == today:
+        return _REALTIME_FUND_CACHE
+    
+    from scripts.proxy_utils import get_proxies_dict
+    cache = {}
+    for page in range(1, 6):  # 翻5页×100=500只
+        try:
+            proxies = get_proxies_dict()
+            url = (
+                "https://push2.eastmoney.com/api/qt/clist/get?"
+                "np=1&fltt=2&invt=2&"
+                "fs=m:0+t:6+f:!2,m:0+t:80+f:!2,m:1+t:2+f:!2,m:1+t:23+f:!2&"
+                f"fields=f12,f62,f10,f7,f6&fid=f62&pn={page}&pz=100&po=1&dect=1&"
+                "ut=fa5fd1943c7b386f172d6893dbfba10b"
+            )
+            resp = requests.get(url, proxies=proxies, timeout=10)
+            items = resp.json().get("data", {}).get("diff", [])
+            if not items:
+                break
+            for s in items:
+                code = s.get("f12", "")
+                if not code:
+                    continue
+                f62 = s.get("f62")
+                try:
+                    net_flow = float(f62) if f62 and f62 != "-" else 0
+                except:
+                    net_flow = 0
+                try:
+                    vol_ratio = float(s.get("f10", 0)) if s.get("f10") and s.get("f10") != "-" else 0
+                except:
+                    vol_ratio = 0
+                try:
+                    turnover = float(s.get("f7", 0)) if s.get("f7") and s.get("f7") != "-" else 0
+                except:
+                    turnover = 0
+                try:
+                    amount = float(s.get("f6", 0)) if s.get("f6") and s.get("f6") != "-" else 0
+                except:
+                    amount = 0
+                cache[code] = {
+                    "net_flow": net_flow,      # 主力净流入(元)
+                    "vol_ratio": vol_ratio,     # 量比
+                    "turnover": turnover,       # 换手率(%)
+                    "amount": amount,           # 成交额(元)
+                }
+            if len(items) < 100:
+                break
+        except Exception as e:
+            print(f"  实时资金流缓存第{page}页失败: {e}")
+            break
+    
+    if cache:
+        _REALTIME_FUND_CACHE = cache
+        _REALTIME_FUND_TS = today
+        print(f"  实时资金流缓存: {len(cache)} 只")
+    return cache
 
 
 def score_sentiment(code):
