@@ -2554,6 +2554,26 @@ def score_sentiment(code):
             if limit_up_cnt < 15:
                 return 0, f"市场退潮:涨停仅{limit_up_cnt}家"
     
+    # V2.4: 否决6 — 情绪退潮熔断
+    if limit_data:
+        up_cnt = len([x for x in limit_data if str(x.get('limit', '')).upper() == 'U'])
+        down_cnt = len([x for x in limit_data if str(x.get('limit', '')).upper() == 'D'])
+        z_cnt = len([x for x in limit_data if str(x.get('limit', '')).upper() == 'Z'])
+        total_b = up_cnt + z_cnt
+        break_rate = z_cnt / total_b * 100 if total_b > 0 else 0
+        
+        if break_rate > 40 and down_cnt > 15:
+            # V2.4: 检查是否可进入冰点拐点试探
+            max_height = 0
+            if step_data:
+                max_height = max([safe_int(x.get('nums', 0)) or 0 for x in step_data], default=0)
+            
+            if max_height <= 2:
+                # 冰点拐点：最高连板降至2板+跌停减少
+                return 0, f"情绪熔断冰点:炸板率{break_rate:.1f}%>40%+跌停{down_cnt}家+连板{max_height}板"
+            else:
+                return 0, f"情绪熔断:炸板率{break_rate:.1f}%>40%+跌停{down_cnt}家"
+    
     # 否决2(主线崩塌)：核心龙头断板 或 所属题材无涨停
     # T+1场景简化：概念涨停数=0视为主线崩塌（=1留给否决5纯跟风）
     if concept_names and cpt_data:
@@ -3304,6 +3324,12 @@ def main():
                  s_score * weights["sentiment"] +
                  st_score * weights["shortterm"]) / total_w if total_w > 0 else 0
         
+        # V2.4: Top-N择优排序（取Top3维度均值，捕捉极端信号）
+        dim_scores = sorted([
+            f_score, t_score, m_score, s_score, st_score
+        ], reverse=True)
+        top3_score = sum(dim_scores[:3]) / 3
+        
         # 多维度共振判定（≥3个维度得分≥75）
         resonance_threshold = 75
         resonance_count = sum([
@@ -3341,7 +3367,8 @@ def main():
                 "count": resonance_count,
                 "threshold": resonance_threshold,
                 "is_resonance": resonance_flag
-            }
+            },
+            "top3_score": round(top3_score, 1),  # V2.4
         })
     
     # 排序

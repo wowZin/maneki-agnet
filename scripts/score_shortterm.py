@@ -2,10 +2,11 @@
 """短线博弈面评分 — 打板专用
 
 因子:
-  1. 封板质量 35% — 封板时间、封单强度
+  1. 封板质量 25% — 封板时间、封单强度
   2. 连板动量 25% — 连板数、涨停基因
-  3. 开盘博弈 20% — 竞价表现、开盘形态
-  4. 板块助攻 20% — 板块热度、身位地位
+  3. 开盘博弈 15% — 竞价表现、开盘形态
+  4. 板块助攻 15% — 板块热度、身位地位
+  5. 攻击独特性 20% — 涨停基因、高开率、弱转强（V2.4新增）
 
 用法:
   from score_shortterm import score_shortterm
@@ -327,31 +328,111 @@ def score_sector(code: str) -> tuple[float, str]:
     return max(total, 0), f"[板块] {reason_str}"
 
 
+# ── 5. 攻击独特性 (20%, V2.4新增) ──────────────────────────
+
+def score_aggression(code: str) -> tuple[float, str]:
+    """攻击独特性评分
+
+    因子：
+    1. 近20日有过涨停 且 次日高开率>50% → +8分
+    2. 近10日最大单日涨幅>7%             → +7分
+    3. 昨日是涨停股+今日弱转强            → +5分
+    """
+    reasons = []
+    score = 0
+    today = _today_str()
+
+    try:
+        # 获取近20个交易日数据
+        end_dt = datetime.now()
+        start_dt = end_dt - __import__("datetime").timedelta(days=30)
+        start = start_dt.strftime("%Y%m%d")
+
+        df_daily = pro.daily(ts_code=code, start_date=start, end_date=today)
+        if df_daily is not None and not df_daily.empty:
+            recent = df_daily.head(20)
+
+            # ① 近20日有过涨停 + 次日高开率>50%
+            limit_up_dates = recent[recent["pct_chg"] >= 9.5]["trade_date"].tolist()
+            if limit_up_dates:
+                high_open_count = 0
+                for i, lu_date in enumerate(limit_up_dates):
+                    # 找该涨停日的下一个交易日
+                    lu_idx = recent[recent["trade_date"] == lu_date].index
+                    if not lu_idx.empty:
+                        pos = recent.index.get_loc(lu_idx[0])
+                        if isinstance(pos, slice):
+                            pos = pos.start
+                        if pos + 1 < len(recent):
+                            next_day = recent.iloc[pos + 1]
+                            next_open = _safe_float(next_day.get("open", 0))
+                            next_pre = _safe_float(next_day.get("pre_close", 0))
+                            if next_pre > 0 and (next_open / next_pre - 1) * 100 > 0:
+                                high_open_count += 1
+                if limit_up_dates and high_open_count / len(limit_up_dates) > 0.5:
+                    score += 8
+                    reasons.append(f"涨停高开率{high_open_count}/{len(limit_up_dates)}+8")
+
+            # ② 近10日最大单日涨幅>7%
+            max_pct = recent.head(10)["pct_chg"].max()
+            if max_pct > 7:
+                score += 7
+                reasons.append(f"近10日最大涨幅{max_pct:.1f}%+7")
+
+            # ③ 昨日涨停+今日弱转强
+            if len(df_daily) >= 2:
+                yesterday_row = df_daily.iloc[1] if len(df_daily) >= 2 else None
+                today_row = df_daily.iloc[0] if len(df_daily) >= 1 else None
+                if yesterday_row is not None and today_row is not None:
+                    y_pct = _safe_float(yesterday_row.get("pct_chg", 0))
+                    t_open = _safe_float(today_row.get("open", 0))
+                    t_pre = _safe_float(today_row.get("pre_close", 0))
+                    t_pct = _safe_float(today_row.get("pct_chg", 0))
+                    if y_pct >= 9.5 and t_pre > 0:
+                        open_pct = (t_open / t_pre - 1) * 100
+                        if -2 <= open_pct <= 2 and t_pct > 4:
+                            score += 5
+                            reasons.append(f"弱转强(昨涨停今开{open_pct:.1f}%当前{t_pct:.1f}%)+5")
+
+        else:
+            reasons.append("无近20日数据")
+
+    except Exception as e:
+        reasons.append(f"攻击因子异常:{str(e)[:20]}")
+
+    total = min(score, 20)
+    reason_str = "; ".join(reasons) if reasons else "无数据"
+    return max(total, 0), f"[攻击] {reason_str}"
+
+
 # ── 综合评分 ──────────────────────────────────────────────
 
 def score_shortterm(code: str) -> tuple[float, str]:
-    """短线博弈面综合评分（0-100）"""
+    """短线博弈面综合评分（0-100）V2.4：新增攻击独特性因子"""
 
     weights = {
-        "seal": 0.35,
+        "seal": 0.25,
         "momentum": 0.25,
-        "open": 0.20,
-        "sector": 0.20,
+        "open": 0.15,
+        "sector": 0.15,
+        "aggression": 0.20,
     }
 
     seal_s, seal_r = score_seal_quality(code)
     momentum_s, momentum_r = score_momentum(code)
     open_s, open_r = score_open_battle(code)
     sector_s, sector_r = score_sector(code)
+    agg_s, agg_r = score_aggression(code)
 
     total = (
         seal_s * weights["seal"]
         + momentum_s * weights["momentum"]
         + open_s * weights["open"]
         + sector_s * weights["sector"]
+        + agg_s * weights["aggression"]
     )
 
-    reason = f"{seal_r} | {momentum_r} | {open_r} | {sector_r}"
+    reason = f"{seal_r} | {momentum_r} | {open_r} | {sector_r} | {agg_r}"
     return round(total, 1), reason
 
 
