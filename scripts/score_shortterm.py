@@ -293,52 +293,116 @@ def score_open_battle(code: str) -> tuple[float, str]:
 # ── 4. 板块助攻 (20%) ────────────────────────────────────
 
 def score_sector(code: str) -> tuple[float, str]:
-    """板块助攻评分"""
+    """板块助攻评分
+    
+    数据源：concept_detail（概念映射）+ limit_cpt_list（概念涨停统计）
+    """
     reasons = []
     score = 0
+    today = _today_str()
 
     try:
-        # 获取股票所属行业/概念
-        df = pro.stock_basic(ts_code=code, fields="industry")
-        industry = ""
-        if df is not None and not df.empty:
-            industry = str(df.iloc[0].get("industry", ""))
+        # 获取个股所属概念
+        concept_names = []
+        try:
+            import requests
+            payload = {
+                "api_name": "concept_detail",
+                "token": os.getenv("TUSHARE_TOKEN", ""),
+                "params": {"ts_code": code},
+                "fields": "id,concept_name"
+            }
+            resp = requests.post("https://api.tushare.pro", json=payload, timeout=10)
+            items = resp.json().get("data", {}).get("items", [])
+            concept_names = [c[1] for c in items if len(c) > 1] if items else []
+        except:
+            pass
 
-        # 获取同行业涨停情况
-        if industry and industry != "nan" and industry:
-            df_today = pro.limit_list_d(trade_date=_today_str(), limit_type="U")
-            if df_today is not None and not df_today.empty:
-                same_industry = df_today[df_today["industry"] == industry]
-                count = len(same_industry)
+        if not concept_names:
+            reasons.append("无概念数据")
+            score += 10
+            return max(min(score, 100), 0), f"[板块] {'; '.join(reasons)}"
 
-                if count >= 5:
-                    score += 40
-                    reasons.append(f"板块爆发({count}只涨停)+40")
-                elif count >= 3:
-                    score += 25
-                    reasons.append(f"板块联动({count}只涨停)+25")
-                elif count >= 1:
-                    score += 15
-                    reasons.append(f"有板块跟风({count}只涨停)+15")
+        # 获取今日概念涨停统计
+        cpt_fields = ["ts_code", "name", "trade_date", "up_nums"]
+        cpt_data = []
+        try:
+            import requests
+            payload2 = {
+                "api_name": "limit_cpt_list",
+                "token": os.getenv("TUSHARE_TOKEN", ""),
+                "params": {"trade_date": today},
+                "fields": ",".join(cpt_fields)
+            }
+            resp2 = requests.post("https://api.tushare.pro", json=payload2, timeout=10)
+            items2 = resp2.json().get("data", {}).get("items", [])
+            fields2 = resp2.json().get("data", {}).get("fields", [])
+            if items2 and fields2:
+                for item in items2:
+                    d = dict(zip(fields2, item))
+                    d["up_nums"] = int(d.get("up_nums", 0)) if d.get("up_nums") else 0
+                    cpt_data.append(d)
+        except:
+            pass
 
-                # 身位地位（在板块内的排序）
-                if count > 0 and code in same_industry["ts_code"].values:
-                    idx = same_industry[same_industry["ts_code"] == code].index[0]
-                    rank_in_industry = same_industry.index.get_loc(idx) + 1
-                    if rank_in_industry == 1:
-                        score += 30
-                        reasons.append("板块龙头+30")
-                    elif rank_in_industry <= 3:
-                        score += 15
-                        reasons.append("板块前排+15")
+        if not cpt_data:
+            reasons.append("无概念涨停统计")
+            score += 10
+            return max(min(score, 100), 0), f"[板块] {'; '.join(reasons)}"
 
-        # 行情不好时板块更显重要
-        if not industry or industry == "nan":
-            reasons.append("行业信息缺失")
-            score += 10  # 给基础分
+        # 构建概念→涨停家数映射（含模糊匹配）
+        concept_ul_cnt = {c["name"]: c["up_nums"] for c in cpt_data if c.get("name") and c.get("up_nums", 0) > 0}
+
+        def _match_ul_cnt(cname):
+            if cname in concept_ul_cnt:
+                return concept_ul_cnt[cname]
+            for k, v in concept_ul_cnt.items():
+                if cname in k or k in cname:
+                    return v
+            return 0
+
+        # 找出所属概念中最大涨停数
+        max_ul = max([_match_ul_cnt(n) for n in concept_names], default=0)
+
+        if max_ul >= 10:
+            score += 40
+            reasons.append(f"板块爆发(概念涨停{max_ul}只)+40")
+        elif max_ul >= 5:
+            score += 30
+            reasons.append(f"板块强联动({max_ul}只涨停)+30")
+        elif max_ul >= 3:
+            score += 20
+            reasons.append(f"板块有热点({max_ul}只涨停)+20")
+        elif max_ul >= 1:
+            score += 10
+            reasons.append(f"板块跟风({max_ul}只涨停)+10")
+        else:
+            reasons.append(f"所属概念无涨停+0")
+
+        # 龙头地位：该股票是否在概念涨停股中
+        is_leader = False
+        try:
+            payload3 = {
+                "api_name": "limit_list_d",
+                "token": os.getenv("TUSHARE_TOKEN", ""),
+                "params": {"trade_date": today},
+                "fields": "ts_code,name"
+            }
+            resp3 = requests.post("https://api.tushare.pro", json=payload3, timeout=10)
+            limit_items = resp3.json().get("data", {}).get("items", [])
+            limit_codes = {x[0] for x in limit_items if x} if limit_items else set()
+            if code in limit_codes:
+                # 试试看是否属于同一概念的其他涨停股
+                is_leader = True  # 自己就是涨停股，加分
+        except:
+            pass
+
+        if is_leader and max_ul > 0:
+            score += 15
+            reasons.append("自身涨停+15")
 
     except Exception as e:
-        reasons.append(f"板块数据异常:{str(e)[:20]}")
+        reasons.append(f"板块数据异常:{str(e)[:30]}")
 
     total = min(score, 100)
     reason_str = "; ".join(reasons) if reasons else "无数据"

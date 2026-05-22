@@ -3166,13 +3166,14 @@ def push_feishu(results):
     import requests
 
     def _stars(total):
-        """综合评级: >=50 ⭐ ⭐ ⭐ ⭐ ⭐  >=40 ⭐ ⭐ ⭐ ⭐  >=35 ⭐ ⭐ ⭐"""
+        """综合评级: >=50 ⭐⭐⭐⭐⭐  >=45 ⭐⭐⭐⭐  >=40 ⭐⭐⭐  >=35 ⭐⭐"""
         if total >= 50: return "⭐ ⭐ ⭐ ⭐ ⭐"
-        if total >= 40: return "⭐ ⭐ ⭐ ⭐"
-        if total >= 35: return "⭐ ⭐ ⭐"
+        if total >= 45: return "⭐ ⭐ ⭐ ⭐"
+        if total >= 40: return "⭐ ⭐ ⭐"
+        if total >= 35: return "⭐ ⭐"
         return ""
 
-    # 推送筛选 (V2.4: 阈值降至35，对应新权重)
+    # 推送筛选 (V2.6: 加权Top3择优，阈值35)
     THRESHOLD = 35
     above_threshold = sorted(
         [r for r in results if r.get('total', 0) >= THRESHOLD],
@@ -3225,14 +3226,12 @@ def push_feishu(results):
     for r in push_list:
         s = r.get('scores', {})
         stars = _stars(r['total'])
-        top3_line = f"\nTop3择优: {r.get('top3_score',0):.1f}" if r.get('top3_score') is not None else ""
         element = {
             "tag": "div",
             "text": {
                 "tag": "lark_md",
                 "content": f"**{r['code']} {r['name']}** {stars}\n"
-                          f"基本面:{s.get('fundamental',0):.0f} 技术面:{s.get('technical',0):.0f} 资金面:{s.get('fundflow',0):.0f} 情绪面:{s.get('sentiment',0):.0f} 短线:{s.get('shortterm',0):.0f}"
-                          f"{top3_line}"
+                          f"综合评级:{r['total']:.1f}  基本面:{s.get('fundamental',0):.0f} 技术面:{s.get('technical',0):.0f} 资金面:{s.get('fundflow',0):.0f} 情绪面:{s.get('sentiment',0):.0f} 短线:{s.get('shortterm',0):.0f}"
             }
         }
         card["elements"].append(element)
@@ -3349,20 +3348,18 @@ def main():
         s_reason = reasons.get("sentiment", "")
         st_reason = reasons.get("shortterm", "")
         
-        # 加权综合评分
-        weights = AGENT_WEIGHTS
-        total_w = sum(weights.values())
-        total = (f_score * weights["fundamental"] + 
-                 t_score * weights["technical"] + 
-                 m_score * weights["fundflow"] + 
-                 s_score * weights["sentiment"] +
-                 st_score * weights["shortterm"]) / total_w if total_w > 0 else 0
-        
-        # V2.4: Top-N择优排序（取Top3维度均值，捕捉极端信号）
-        dim_scores = sorted([
-            f_score, t_score, m_score, s_score, st_score
-        ], reverse=True)
-        top3_score = sum(dim_scores[:3]) / 3
+        # V2.6: 加权Top3择优（按加权贡献选前3维，取加权均值）
+        # 让权重真正影响哪3个维度进Top3以及贡献大小
+        dim_contribs = [
+            (f_score, weights.get("fundamental", 1.0)),
+            (t_score, weights.get("technical", 1.0)),
+            (m_score, weights.get("fundflow", 1.0)),
+            (s_score, weights.get("sentiment", 1.0)),
+            (st_score, weights.get("shortterm", 1.5)),
+        ]
+        dim_contribs.sort(key=lambda x: x[0] * x[1], reverse=True)
+        top3 = dim_contribs[:3]
+        total = sum(s * w for s, w in top3) / sum(w for _, w in top3) if sum(w for _, w in top3) > 0 else 0
         
         # 多维度共振判定（≥3个维度得分≥75）
         resonance_threshold = 75
@@ -3402,23 +3399,17 @@ def main():
                 "threshold": resonance_threshold,
                 "is_resonance": resonance_flag
             },
-            "top3_score": round(top3_score, 1),  # V2.4
+            "top3_score": round(total, 1),  # V2.6: 等同总分(加权Top3择优)
         })
     
-    # 排序（双排序输出）
-    by_weighted = sorted(results, key=lambda x: x["total"], reverse=True)
-    by_top3 = sorted(results, key=lambda x: x.get("top3_score", 0), reverse=True)
-    results = by_weighted  # 保存时用加权排序保证有序
-    
-    print("\n[排序结果 加权总分]")
-    for i, r in enumerate(by_weighted, 1):
+    # 排序（全按总分排序，总分=Top3均值）
+    by_total = sorted(results, key=lambda x: x["total"], reverse=True)
+    results = by_total
+
+    print("\n[排序结果]")
+    for i, r in enumerate(by_total, 1):
         resonance_tag = " [共振]" if r.get("resonance", {}).get("is_resonance") else ""
-        print(f"  {i}. {r['code']} {r['name']} - 加权:{r['total']:.1f} Top3:{r.get('top3_score',0):.1f}{resonance_tag}")
-    
-    print("\n[排序结果 Top3择优]")
-    for i, r in enumerate(by_top3, 1):
-        resonance_tag = " [共振]" if r.get("resonance", {}).get("is_resonance") else ""
-        print(f"  {i}. {r['code']} {r['name']} - Top3:{r.get('top3_score',0):.1f} 加权:{r['total']:.1f}{resonance_tag}")
+        print(f"  {i}. {r['code']} {r['name']} - 总分:{r['total']:.1f}{resonance_tag}")
     
     # 保存结果
     output_dir = PROJECT_DIR / "data" / "analysis"

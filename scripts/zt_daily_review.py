@@ -475,28 +475,32 @@ def compute_ab_comparison(all_analysis: list, limit_ups: list) -> dict:
     if not AB_ENABLED:
         return {"enabled": False, "note": "当前权重与旧权重相同，AB不生效"}
 
-    def weighted_total(scores, weights):
-        w_sum = sum(weights.values())
-        return sum(scores.get(d, 0) * weights[d] for d in weights) / w_sum if w_sum > 0 else 0
+    def weighted_top3_total(scores, weights):
+        """加权Top3择优：按加权贡献取前3维的加权均值"""
+        dims = ['fundamental', 'technical', 'fundflow', 'sentiment', 'shortterm']
+        contribs = [(scores.get(d, 0) or 0, weights.get(d, 1.0)) for d in dims]
+        contribs.sort(key=lambda x: x[0] * x[1], reverse=True)
+        top3 = contribs[:3]
+        total_s = sum(s * w for s, w in top3)
+        total_w = sum(w for _, w in top3)
+        return total_s / total_w if total_w > 0 else 0
 
     THRESHOLD = 35
 
     # 旧权重推送
-    prev_pushed = []
     for item in all_analysis:
         s = item.get("scores", {})
         if s:
-            item["_prev_total"] = weighted_total(s, PREV_WEIGHTS)
+            item["_prev_total"] = weighted_top3_total(s, PREV_WEIGHTS)
     prev_candidates = [item for item in all_analysis if item.get("_prev_total", 0) >= THRESHOLD]
     prev_candidates.sort(key=lambda x: x.get("_prev_total", 0), reverse=True)
     prev_pushed = prev_candidates[:3]
 
-    # 新权重推送（从pushed记录取，或同上计算）
-    curr_pushed = []
+    # 新权重推送
     for item in all_analysis:
         s = item.get("scores", {})
         if s:
-            item["_curr_total"] = weighted_total(s, CURRENT_WEIGHTS)
+            item["_curr_total"] = weighted_top3_total(s, CURRENT_WEIGHTS)
     curr_candidates = [item for item in all_analysis if item.get("_curr_total", 0) >= THRESHOLD]
     curr_candidates.sort(key=lambda x: x.get("_curr_total", 0), reverse=True)
     curr_pushed = curr_candidates[:3]
@@ -606,7 +610,7 @@ def send_feishu_report(report: dict):
         verdict = '新权重更优' if curr_rate > prev_rate else ('旧权重更优' if prev_rate > curr_rate else '持平')
         card["elements"].extend([
             {"tag": "hr"},
-            {"tag": "div", "text": {"tag": "lark_md", "content": f"**权重AB对比**\\n旧: 推送{prev['pushed']}只 命中{prev['hits']}只 ({prev_rate:.0f}%)\\n新: 推送{curr['pushed']}只 命中{curr['hits']}只 ({curr_rate:.0f}%)\\n结论: {verdict}"}}
+            {"tag": "div", "text": {"tag": "lark_md", "content": f"**权重AB对比(加权Top3择优)\n旧: 推送{prev['pushed']}只 命中{prev['hits']}只 ({prev_rate:.0f}%)\n新: 推送{curr['pushed']}只 命中{curr['hits']}只 ({curr_rate:.0f}%)\n结论: {verdict}"}}
         ])
     
     # 发送消息
