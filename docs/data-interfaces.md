@@ -104,4 +104,4 @@
 | `ak.stock_board_concept_name_em()` | 概念板块列表 | sentiment_analysis.py | ❌ | 封禁 |
 | `ak.stock_board_concept_cons_em()` | 概念成分股 | sentiment_analysis.py | ❌ | 封禁 |
 
-**结论**: akshare 全系不可用（底层走东财被封IP），已全部降级为 Tushare 或 CDP+代理 方案。保留在代码中作为备用注释，实际不生效。
+**结论**: akshare 全系不可用（底层走东财被封IP），已全部降级为 Tushare 或 requests+代理 方案。保留在代码中作为备用注释，实际不生效。
