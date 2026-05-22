@@ -3156,11 +3156,18 @@ def push_feishu(results):
     """发送飞书卡片
 
     推送规则：
-    - 综合分>=50的股票按总分降序取前3只推送
-    - 如果没有>=50的股票，不推送
+    - 综合评级>=35(⭐⭐⭐)的股票按总分降序取前3只推送
+    - 如果没有>=35的股票，不推送
     - 推送记录保存到 data/pushed/ 目录，供复盘使用
     """
     import requests
+
+    def _stars(total):
+        """综合评级: >=50⭐⭐⭐⭐⭐ >=40⭐⭐⭐⭐ >=35⭐⭐⭐"""
+        if total >= 50: return "⭐⭐⭐⭐⭐"
+        if total >= 40: return "⭐⭐⭐⭐"
+        if total >= 35: return "⭐⭐⭐"
+        return ""
 
     # 推送筛选 (V2.4: 阈值降至35，对应新权重)
     THRESHOLD = 35
@@ -3170,10 +3177,10 @@ def push_feishu(results):
     )[:3]
     if above_threshold:
         push_list = above_threshold
-        print(f"  推送池: {len(above_threshold)}只(综合分>={THRESHOLD}前3)")
+        print(f"  推送池: {len(above_threshold)}只(综合评级>={THRESHOLD}前3)")
     else:
         push_list = []
-        print(f"  无>={THRESHOLD}分股票，不推送")
+        print(f"  无>={THRESHOLD}评级股票，不推送")
 
     if not push_list:
         print("  无可推送股票")
@@ -3214,12 +3221,14 @@ def push_feishu(results):
 
     for r in push_list:
         s = r.get('scores', {})
+        stars = _stars(r['total'])
         top3_tag = f" | Top3:**{r.get('top3_score',0):.1f}**" if r.get('top3_score') is not None else ""
         element = {
             "tag": "div",
             "text": {
                 "tag": "lark_md",
-                "content": f"**{r['code']} {r['name']}** | 综合:**{r['total']:.1f}**{top3_tag}\n基本面:{s.get('fundamental',0):.0f} | 技术面:{s.get('technical',0):.0f} | 资金面:{s.get('fundflow',0):.0f} | 情绪面:{s.get('sentiment',0):.0f} | 短线:{s.get('shortterm',0):.0f}"
+                "content": f"**{r['code']} {r['name']}** {stars}\n"
+                          f"基本面:{s.get('fundamental',0):.0f} | 技术面:{s.get('technical',0):.0f} | 资金面:{s.get('fundflow',0):.0f} | 情绪面:{s.get('sentiment',0):.0f} | 短线:{s.get('shortterm',0):.0f}{top3_tag}"
             }
         }
         card["elements"].append(element)
