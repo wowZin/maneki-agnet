@@ -28,6 +28,23 @@ load_dotenv(PROJECT_DIR / ".env")
 ts.set_token(os.getenv("TUSHARE_TOKEN", ""))
 pro = ts.pro_api()
 
+# ── 全市场涨停列表缓存 ──
+_LIMIT_UP_CACHE = None
+_LIMIT_UP_CACHE_DATE = None
+
+def _get_today_limit_ups():
+    """全市场涨停列表(缓存，每轮只调一次，防10000次/天限流)"""
+    global _LIMIT_UP_CACHE, _LIMIT_UP_CACHE_DATE
+    today = datetime.now().strftime("%Y%m%d")
+    if _LIMIT_UP_CACHE is not None and _LIMIT_UP_CACHE_DATE == today:
+        return _LIMIT_UP_CACHE
+    try:
+        _LIMIT_UP_CACHE = pro.limit_list_d(trade_date=today, limit_type="U")
+        _LIMIT_UP_CACHE_DATE = today
+    except Exception:
+        _LIMIT_UP_CACHE = None
+    return _LIMIT_UP_CACHE
+
 
 # ── 工具函数 ──────────────────────────────────────────────
 
