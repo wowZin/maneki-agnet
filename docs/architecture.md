@@ -16,15 +16,16 @@
                         |
                         v
                    zt-team-leader (dispatch)
-                   /      |      \      \
-                  v       v       v      v
-       zt-technician  zt-fundamental  zt-fund-flow  zt-sentiment
-          (score)        (score)        (score)      (score)
-                  \       |       /      /
-                   v      v      v     v
+                   /      |      \\      \\      \\
+                  v       v       v      v      v
+       zt-technician  zt-fundamental  zt-fund-flow  zt-sentiment  zt-shortterm
+          (score)        (score)        (score)      (score)       (score)
+                  \\       |       /      /        /
+                   v      v      v     v        v
                    zt-team-leader (aggregate)
+                        |  ╱ 加权求和
+                        |  ╲  Top3择优（V2.4并行）
                         |
-                        v
               [置信度 > 50%] --> 飞书Webhook
               [16:00 复盘]   --> 飞书Webhook
 ```
@@ -59,12 +60,13 @@
 每个 agent 独立容器运行:
 
 ```text
-zt-trigger:       8642/9119
-zt-technician:    8643/9120
-zt-fundamental:   8644/9121
-zt-fund-flow:     8645/9122
-zt-sentiment:     8646/9123
-zt-team-leader:   8650/9130
+| zt-trigger:       8642/9119
+| zt-technician:    8643/9120
+| zt-fundamental:   8644/9121
+| zt-fund-flow:     8645/9122
+| zt-sentiment:     8646/9123
+| zt-shortterm:     8647/9124
+| zt-team-leader:   8650/9130
 ```
 
 所有端口仅绑定 localhost，通过 Docker 内部网络互通。
