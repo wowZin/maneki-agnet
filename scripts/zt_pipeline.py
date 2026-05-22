@@ -2752,13 +2752,29 @@ def score_sentiment(code):
     # Null处理：跳过人气排名检查
     popularity_rank = None  # 无真实人气数据，跳过排名检查
     
-    # 获取个股当日涨幅（V2.4: 优先实时缓存 > Tushare日线 > limit_data）
+    # 获取个股当日涨幅（V2.4: 优先实时缓存 > 个股实时接口 > Tushare日线 > limit_data）
     stock_pct = 0
     # V2.4: 盘中优先使用实时数据缓存
     code_short = code.split('.')[0]
     realtime_cache = _batch_fetch_realtime_pct()
     if code_short in realtime_cache:
         stock_pct = realtime_cache[code_short] or 0
+    
+    # V2.4: 缓存未命中时，用个股行情接口单独查
+    if stock_pct == 0:
+        try:
+            import requests as _req2
+            from scripts import proxy_utils as _pu2
+            proxies2 = _pu2.get_proxies_dict() if _pu2.is_proxy_enabled() else None
+            market = '0' if code_short.startswith(('00','30')) else '1'
+            url2 = f"https://push2.eastmoney.com/api/qt/stock/get?secid={market}.{code_short}&fields=f43,f44,f45,f46,f47,f48,f49,f50,f51,f52,f53,f54,f55,f57,f58,f168,f170,f171,f292"
+            resp2 = _req2.get(url2, proxies=proxies2, timeout=5)
+            d2 = resp2.json().get("data", {})
+            pct = d2.get("f170")
+            if pct is not None:
+                stock_pct = float(pct)
+        except:
+            pass
     
     if stock_pct == 0:
         try:
