@@ -256,8 +256,8 @@ def _positive_summary(result: dict, change_pct: float) -> str:
         points.append(f"⚠️ 盘中跌{change_pct:.1f}%需注意风险")
 
     if not points:
-        if total >= 50:
-            return "各维度无明显突出信号，综合评分中等偏上"
+        if total >= 40:
+            return "各维度无明显突出信号，综合评级中等偏上"
         return "各维度信号偏弱，建议观望"
 
     return "；".join(points)
@@ -277,7 +277,7 @@ def _generate_ai_summary(result: dict, quote: dict | None = None) -> str:
     prompt = f"""你是一个A股股票分析师。请根据以下评分数据，用一段简洁的话总结这只股票的多空信号（不超过100字）。
 
 股票评分数据：
-- 综合评分: {total}/100
+- 综合评级: {_stars(total)}
 - 实时涨幅: {change_pct:+.2f}%
 - 最新价: {price:.2f}
 
@@ -286,6 +286,7 @@ def _generate_ai_summary(result: dict, quote: dict | None = None) -> str:
 - 技术面 {scores.get('technical',0)}分: {reasons.get('technical','无')}
 - 资金面 {scores.get('fundflow',0)}分: {reasons.get('fundflow','无')}
 - 情绪面 {scores.get('sentiment',0)}分: {reasons.get('sentiment','无')}
+- 短线博弈 {scores.get('shortterm',0)}分: {reasons.get('shortterm','无')}
 
 要求：
 1. 指出最突出的积极或消极信号
@@ -323,16 +324,24 @@ def _generate_ai_summary(result: dict, quote: dict | None = None) -> str:
 
 
 def _dim_label(dim: str) -> str:
-    labels = {"fundamental": "基本面", "technical": "技术面", "fundflow": "资金面", "sentiment": "情绪面"}
+    labels = {"fundamental": "基本面", "technical": "技术面", "fundflow": "资金面", "sentiment": "情绪面", "shortterm": "短线博弈"}
     return labels.get(dim, dim)
 
 
+def _stars(total: float) -> str:
+    """星级: >=50:5星 >=40:4星 >=35:3星"""
+    if total >= 50: return "⭐ ⭐ ⭐ ⭐ ⭐"
+    if total >= 40: return "⭐ ⭐ ⭐ ⭐"
+    if total >= 35: return "⭐ ⭐ ⭐"
+    return ""
+
+
 def _score_color(score: float) -> str:
-    if score >= 80:
+    if score >= 50:
         return "green"
-    elif score >= 60:
-        return "blue"
     elif score >= 40:
+        return "blue"
+    elif score >= 35:
         return "orange"
     return "red"
 
@@ -354,17 +363,18 @@ def _build_result_card(stock_name: str, result: dict, quote: dict | None = None)
     change_pct = (quote or {}).get("change_pct", 0)
     price = (quote or {}).get("price", 0)
 
-    # 标题行：综合评分 + 实时涨跌幅（分行展示）
-    header_lines = [f"**综合评分: {total:.1f}**"]
+    # 标题行：综合评级 + 实时涨跌幅
+    stars_str = _stars(total)
+    header_lines = [f"**综合评级 {stars_str}**"]
     if change_pct is not None and change_pct != "":
         header_lines.append(f"**涨跌幅: {change_pct:+.2f}%**")
     if price is not None and price != "":
         header_lines.append(f"**现价: {price:.2f}**")
     header_content = "\n".join(header_lines)
 
-    # 各维度详情
+    # 各维度详情（五维度+短线博弈）
     score_lines = []
-    for dim in ["fundamental", "technical", "fundflow", "sentiment"]:
+    for dim in ["fundamental", "technical", "fundflow", "sentiment", "shortterm"]:
         s = scores.get(dim, 0)
         r = reasons.get(dim, "")
         short_reason = r.split(";")[0] if r else "无数据"
