@@ -21,7 +21,6 @@ import requests
 # 项目根目录
 PROJECT_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
-sys.path.insert(0, str(PROJECT_DIR / "scripts"))  # 支持 from cdp_fetch import ...
 
 # 从.env加载配置
 def load_env():
