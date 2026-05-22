@@ -98,10 +98,10 @@
 
 | 接口 | 用途 | 文件 | 可用? | 备注 |
 |------|------|------|:--:|------|
-| `ak.stock_fund_flow_individual()` | 全市场实时资金流向 | zt_pipeline.py | ❌ | 封禁,降级用Tushare T+1 |
-| `ak.stock_zh_a_spot_em()` | 全市场实时行情 | scan_akshare.py | ❌ | 封禁 |
-| `ak.stock_individual_fund_flow()` | 个股资金流 | scan_akshare.py | ❌ | 封禁 |
-| `ak.stock_board_concept_name_em()` | 概念板块列表 | sentiment_analysis.py | ❌ | 封禁 |
-| `ak.stock_board_concept_cons_em()` | 概念成分股 | sentiment_analysis.py | ❌ | 封禁 |
+| `ak.stock_fund_flow_individual()` | ~~全市场实时资金流向~~ | zt_pipeline.py | ❌ | 已移除,改用Tushare moneyflow |
+| `ak.stock_zh_a_spot_em()` | 全市场实时行情 | scan_akshare.py | ❌ | 死代码,不被pipeline引用 |
+| `ak.stock_individual_fund_flow()` | 个股资金流 | scan_akshare.py | ❌ | 死代码,不被pipeline引用 |
+| `ak.stock_board_concept_name_em()` | 概念板块列表 | sentiment_analysis.py | ❌ | 死代码,不被pipeline引用 |
+| `ak.stock_board_concept_cons_em()` | 概念成分股 | sentiment_analysis.py | ❌ | 死代码,不被pipeline引用 |
 
-**结论**: akshare 全系不可用（底层走东财被封IP），已全部降级为 Tushare 或 requests+代理 方案。保留在代码中作为备用注释，实际不生效。
+**结论**: akshare 全系不可用。`stock_fund_flow_individual` 已从pipeline移除，直接使用 Tushare moneyflow。其余4个为死代码，不影响运行。
