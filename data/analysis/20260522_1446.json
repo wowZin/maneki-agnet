@@ -1,0 +1,354 @@
+[
+  {
+    "code": "002297.SZ",
+    "name": "博云新材",
+    "scores": {
+      "fundamental": 70.0,
+      "technical": 16,
+      "fundflow": 44,
+      "sentiment": 6,
+      "shortterm": 1.4
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=3.0%偏低; 扣非净利+4412%; 营收+126%; 14个概念; 近期2条公告",
+      "technical": "[无] 暴量滞涨(换手31.9%)-10; 回踩MA20企稳+3; 下影支撑+4; 波动收敛(带宽32.4%)+5; 价>中轨+2; 板块中性(20%>MA20)+2",
+      "fundflow": "[低] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]8.4%-5 主力占比偏弱[T-1]8.4%-5; [龙虎18分] [盘中]封单24286.0%流通市值+10 [盘中]早封板09:41:24+8; [盘口14分] 持续净流入4.71亿+10 超大单主导+4; [融资2分] [盘中]融资买入占比100.0%+2; [锁仓10分] 流入递增锁仓+7 流入加速+3",
+      "sentiment": "[无] 换手31.9%过热-2; 连板基因6连板+3; 竞价关注度高(量比1.6)+3; 竞价成交7213万+2",
+      "shortterm": "[封板] 封板数据异常:抱歉，您访问接口(limit_list_ | [连板] 连板数据异常:抱歉，您访问接口(limit_list_ | [开盘] 暂无今日数据 | [板块] 板块数据异常:抱歉，您访问接口(limit_list_ | [攻击] 近10日最大涨幅8.5%+7"
+    },
+    "weights": {
+      "fundamental": "1.5",
+      "technical": "1.0",
+      "fundflow": "0.5",
+      "sentiment": "1.2",
+      "shortterm": "1.5"
+    },
+    "total": 26.71929824561403,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    },
+    "top3_score": 43.3
+  },
+  {
+    "code": "600382.SH",
+    "name": "广东明珠",
+    "scores": {
+      "fundamental": 72.0,
+      "technical": 15,
+      "fundflow": 0,
+      "sentiment": 6,
+      "shortterm": 3.0
+    },
+    "reasons": {
+      "fundamental": "[中] 扣非净利+22%; 8个概念; 近期7条公告; 解禁冲击低+0.1",
+      "technical": "[无] 换手5.4%健康+5; MA60下倾-5; 回踩MA10企稳+5; 波动收敛(带宽16.0%)+5; 价>中轨+2; 分时强势(回撤0.4%)+3",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15; [龙虎0分] [盘中]封单25.5%流通市值+10 [盘中]尾板14:39:42-8 [盘中]开板5次-7; [盘口0分] 净流出0.40亿; [融资0分] [盘中]融资主力同向+2 [盘中]融资3日连降-5",
+      "sentiment": "[无] 换手5.4%+1; 竞价跳空-1.5%[震荡态×1.0]→0分; 竞价关注度高(量比2.0)+3; 竞价成交659万+2",
+      "shortterm": "[封板] 封板数据异常:抱歉，您访问接口(limit_list_ | [连板] 连板数据异常:抱歉，您访问接口(limit_list_ | [开盘] 暂无今日数据 | [板块] 板块数据异常:抱歉，您访问接口(limit_list_ | [攻击] 涨停高开率1/1+8; 近10日最大涨幅10.1%+7"
+    },
+    "weights": {
+      "fundamental": "1.5",
+      "technical": "1.0",
+      "fundflow": "0.5",
+      "sentiment": "1.2",
+      "shortterm": "1.5"
+    },
+    "total": 23.631578947368418,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    },
+    "top3_score": 31.0
+  },
+  {
+    "code": "001266.SZ",
+    "name": "宏英智能",
+    "scores": {
+      "fundamental": 70.0,
+      "technical": 0,
+      "fundflow": 17,
+      "sentiment": 8,
+      "shortterm": 3.0
+    },
+    "reasons": {
+      "fundamental": "[中] ROE=1.6%偏低; 扣非净利+1897%; 营收+186%; 近期4条公告; 股东户数-25.7%",
+      "technical": "高位滞涨:涨幅64%,换手21.0%,长上影",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]14.1%-5 主力占比偏弱[T-1]14.1%-5; [龙虎17分] [盘中]封单31932.7%流通市值+10 [盘中]秒封/一字板+7; [盘口0分] 净流出0.02亿 对倒嫌疑换手21.0%-12; [融资0分] [盘中]无融资数据",
+      "sentiment": "[无] 换手21.0%活跃+2; 连板基因2连板+3; 竞价关注度较高(量比0.8)+1; 竞价成交524万+2",
+      "shortterm": "[封板] 封板数据异常:抱歉，您访问接口(limit_list_ | [连板] 连板数据异常:抱歉，您访问接口(limit_list_ | [开盘] 暂无今日数据 | [板块] 板块数据异常:抱歉，您访问接口(limit_list_ | [攻击] 涨停高开率2/3+8; 近10日最大涨幅10.0%+7"
+    },
+    "weights": {
+      "fundamental": "1.5",
+      "technical": "1.0",
+      "fundflow": "0.5",
+      "sentiment": "1.2",
+      "shortterm": "1.5"
+    },
+    "total": 22.3859649122807,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    },
+    "top3_score": 31.7
+  },
+  {
+    "code": "002246.SZ",
+    "name": "北化股份",
+    "scores": {
+      "fundamental": 73.0,
+      "technical": 0,
+      "fundflow": 0,
+      "sentiment": 3,
+      "shortterm": 1.4
+    },
+    "reasons": {
+      "fundamental": "[中] 扣非净利+200%; 7个概念; 近期3条公告; 解禁冲击低+0.1",
+      "technical": "资金持续出逃:近2日净流出+收盘/中轨0.938<0.99",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-2.4%<5%+3日累计净流入-4245≤0",
+      "sentiment": "[无] 换手8.3%+1; 竞价跳空1.9%[震荡态×1.0]→1分; 竞价成交436万+1",
+      "shortterm": "[封板] 封板数据异常:抱歉，您访问接口(limit_list_ | [连板] 连板数据异常:抱歉，您访问接口(limit_list_ | [开盘] 暂无今日数据 | [板块] 板块数据异常:抱歉，您访问接口(limit_list_ | [攻击] 近10日最大涨幅10.0%+7"
+    },
+    "weights": {
+      "fundamental": "1.5",
+      "technical": "1.0",
+      "fundflow": "0.5",
+      "sentiment": "1.2",
+      "shortterm": "1.5"
+    },
+    "total": 20.210526315789473,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    },
+    "top3_score": 25.8
+  },
+  {
+    "code": "002635.SZ",
+    "name": "安洁科技",
+    "scores": {
+      "fundamental": 49.0,
+      "technical": 32,
+      "fundflow": 5,
+      "sentiment": 2,
+      "shortterm": 3.0
+    },
+    "reasons": {
+      "fundamental": "[低] ROE=0.6%偏低; 扣非净利-42%; 19个概念; 股东户数-11.9%; 解禁冲击低+0.1",
+      "technical": "[无] 换手12.7%健康+5; 多头排列+15; 回踩MA10企稳+5; 价>中轨+2; 板块共振(50%>MA20)+5",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]9.2%-5 主力占比偏弱[T-1]9.2%-5; [龙虎3分] [盘中]封单5706.1%流通市值+10 [盘中]开板12次-7; [盘口0分] 净流出1.08亿 对倒嫌疑换手12.7%-12; [融资2分] [盘中]融资买入占比100.0%+2",
+      "sentiment": "[无] 换手12.7%+1; 竞价成交199万+1",
+      "shortterm": "[封板] 封板数据异常:抱歉，您访问接口(limit_list_ | [连板] 连板数据异常:抱歉，您访问接口(limit_list_ | [开盘] 暂无今日数据 | [板块] 板块数据异常:抱歉，您访问接口(limit_list_ | [攻击] 涨停高开率1/1+8; 近10日最大涨幅10.0%+7"
+    },
+    "weights": {
+      "fundamental": "1.5",
+      "technical": "1.0",
+      "fundflow": "0.5",
+      "sentiment": "1.2",
+      "shortterm": "1.5"
+    },
+    "total": 20.157894736842106,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    },
+    "top3_score": 28.7
+  },
+  {
+    "code": "600844.SH",
+    "name": "金煤科技",
+    "scores": {
+      "fundamental": 62.0,
+      "technical": 0,
+      "fundflow": 23,
+      "sentiment": 0,
+      "shortterm": 0.0
+    },
+    "reasons": {
+      "fundamental": "[中] 扣非净利+69%; 8个概念; 近期1条公告; 股东户数+76.4%; 解禁冲击低+0.1",
+      "technical": "资金持续出逃:近2日净流出+收盘/中轨0.894<0.99",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]5.2%-5 主力占比偏弱[T-1]5.2%-5; [龙虎21分] [盘中]封单4063.6%流通市值+10 [盘中]早封板09:32:23+8 [盘中]开板1次+3; [盘口0分] 净流出0.29亿; [融资2分] [盘中]融资主力同向+2",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 封板数据异常:抱歉，您访问接口(limit_list_ | [连板] 连板数据异常:抱歉，您访问接口(limit_list_ | [开盘] 暂无今日数据 | [板块] 板块数据异常:抱歉，您访问接口(limit_list_ | [攻击] 无数据"
+    },
+    "weights": {
+      "fundamental": "1.5",
+      "technical": "1.0",
+      "fundflow": "0.5",
+      "sentiment": "1.2",
+      "shortterm": "1.5"
+    },
+    "total": 18.333333333333332,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    },
+    "top3_score": 28.3
+  },
+  {
+    "code": "600063.SH",
+    "name": "皖维高新",
+    "scores": {
+      "fundamental": 57.0,
+      "technical": 0,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 0.0
+    },
+    "reasons": {
+      "fundamental": "[中] 13个概念; 近期1条公告; 解禁冲击低+0.1; 流动性风险",
+      "technical": "资金持续出逃:近2日净流出+收盘/中轨0.886<0.99",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-19.0%<5%+3日累计净流入-11294≤0",
+      "sentiment": "[无] 无明显信号",
+      "shortterm": "[封板] 封板数据异常:抱歉，您访问接口(limit_list_ | [连板] 连板数据异常:抱歉，您访问接口(limit_list_ | [开盘] 暂无今日数据 | [板块] 板块数据异常:抱歉，您访问接口(limit_list_ | [攻击] 无数据"
+    },
+    "weights": {
+      "fundamental": "1.5",
+      "technical": "1.0",
+      "fundflow": "0.5",
+      "sentiment": "1.2",
+      "shortterm": "1.5"
+    },
+    "total": 15.0,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    },
+    "top3_score": 19.0
+  },
+  {
+    "code": "603281.SH",
+    "name": "江瀚新材",
+    "scores": {
+      "fundamental": 0,
+      "technical": 22,
+      "fundflow": 0,
+      "sentiment": 3,
+      "shortterm": 0.0
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 大额解禁20260202占比10.1%",
+      "technical": "[无] 换手1.7%健康+5; 均线多头(斜率平)+10; 回踩MA10企稳+5; 价>中轨+2; 板块弱势(<20%>MA20)天花板74分",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]-0.00%-15 否决4豁免(3日累计>0)-5; [龙虎0分] [盘中]封单15569.4%流通市值+10 [盘中]T-1未涨停-15; [盘口0分] 净流出0.19亿; [融资0分] [盘中]无融资数据",
+      "sentiment": "[无] 竞价跳空1.0%[震荡态×1.0]→1分; 竞价关注度较高(量比0.6)+1; 竞价成交133万+1",
+      "shortterm": "[封板] 封板数据异常:抱歉，您访问接口(limit_list_ | [连板] 连板数据异常:抱歉，您访问接口(limit_list_ | [开盘] 暂无今日数据 | [板块] 板块数据异常:抱歉，您访问接口(limit_list_ | [攻击] 无数据"
+    },
+    "weights": {
+      "fundamental": "1.5",
+      "technical": "1.0",
+      "fundflow": "0.5",
+      "sentiment": "1.2",
+      "shortterm": "1.5"
+    },
+    "total": 4.491228070175438,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    },
+    "top3_score": 8.3
+  },
+  {
+    "code": "603528.SH",
+    "name": "多伦科技",
+    "scores": {
+      "fundamental": 0,
+      "technical": 0,
+      "fundflow": 25,
+      "sentiment": 0,
+      "shortterm": 0.0
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 扣非净利润连续亏损(无困境反转)",
+      "technical": "资金持续出逃:近2日净流出+收盘/中轨0.969<0.99",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]8.7%-5 主力占比偏弱[T-1]8.7%-5; [龙虎25分] [盘中]封单25496.8%流通市值+10 [盘中]早封板09:25:00+8 [盘中]秒封/一字板+7; [盘口0分] 净流出0.14亿; [融资0分] [盘中]无融资数据",
+      "sentiment": "[无] 无明显信号",
+      "shortterm": "[封板] 封板数据异常:抱歉，您访问接口(limit_list_ | [连板] 连板数据异常:抱歉，您访问接口(limit_list_ | [开盘] 暂无今日数据 | [板块] 板块数据异常:抱歉，您访问接口(limit_list_ | [攻击] 无数据"
+    },
+    "weights": {
+      "fundamental": "1.5",
+      "technical": "1.0",
+      "fundflow": "0.5",
+      "sentiment": "1.2",
+      "shortterm": "1.5"
+    },
+    "total": 2.1929824561403506,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    },
+    "top3_score": 8.3
+  },
+  {
+    "code": "603363.SH",
+    "name": "傲农生物",
+    "scores": {
+      "fundamental": 0,
+      "technical": 0,
+      "fundflow": 13,
+      "sentiment": 0,
+      "shortterm": 1.4
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 扣非净利润连续亏损(无困境反转)",
+      "technical": "资金持续出逃:近2日净流出+收盘/中轨0.967<0.99",
+      "fundflow": "[无] [主力0分] 主力净流入[T-1]0.00%-15 主力占比偏弱[T-1]11.6%-5 主力占比偏弱[T-1]11.6%-5; [龙虎13分] [盘中]封单3080.5%流通市值+10 [盘中]开板1次+3; [盘口0分] 净流出0.38亿; [融资0分] [盘中]融资主力同向+2 [盘中]融资3日连降-5",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 封板数据异常:抱歉，您访问接口(limit_list_ | [连板] 连板数据异常:抱歉，您访问接口(limit_list_ | [开盘] 暂无今日数据 | [板块] 板块数据异常:抱歉，您访问接口(limit_list_ | [攻击] 近10日最大涨幅10.1%+7"
+    },
+    "weights": {
+      "fundamental": "1.5",
+      "technical": "1.0",
+      "fundflow": "0.5",
+      "sentiment": "1.2",
+      "shortterm": "1.5"
+    },
+    "total": 1.5087719298245612,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    },
+    "top3_score": 4.8
+  },
+  {
+    "code": "000517.SZ",
+    "name": "荣安地产",
+    "scores": {
+      "fundamental": 0,
+      "technical": 0,
+      "fundflow": 0,
+      "sentiment": 0,
+      "shortterm": 0.0
+    },
+    "reasons": {
+      "fundamental": "财务避雷否决: 扣非净利润连续亏损(无困境反转); 非经常性损益占比24%>20%",
+      "technical": "资金持续出逃:近2日净流出+收盘/中轨0.935<0.99",
+      "fundflow": "否决: 纯散户博弈[T-1]:主力净占比-16.0%<5%+3日累计净流入-2081≤0",
+      "sentiment": "纯跟风弱势:涨幅仅0.0%<3%",
+      "shortterm": "[封板] 封板数据异常:抱歉，您访问接口(limit_list_ | [连板] 连板数据异常:抱歉，您访问接口(limit_list_ | [开盘] 暂无今日数据 | [板块] 板块数据异常:抱歉，您访问接口(limit_list_ | [攻击] 无数据"
+    },
+    "weights": {
+      "fundamental": "1.5",
+      "technical": "1.0",
+      "fundflow": "0.5",
+      "sentiment": "1.2",
+      "shortterm": "1.5"
+    },
+    "total": 0.0,
+    "resonance": {
+      "count": 0,
+      "threshold": 75,
+      "is_resonance": false
+    },
+    "top3_score": 0.0
+  }
+]
