@@ -319,7 +319,7 @@ class TestConfidenceDistribution:
 # ===== load_today_analysis 推送规则测试 =====
 
 class TestLoadTodayAnalysisPushRule:
-    """测试推送规则：>=50取前3（按总分降序），<50不推送"""
+    """测试推送规则：>=35取前3（按总分降序），<35不推送"""
 
     def _setup_dirs(self, tmp_path):
         """创建 data/analysis + data/pushed 目录，返回 data 目录"""
@@ -335,8 +335,8 @@ class TestLoadTodayAnalysisPushRule:
             json.dumps(data, ensure_ascii=False)
         )
 
-    def test_above_50_top3_sorted(self, tmp_path):
-        """5只>=50分，只推送前3（按总分降序）"""
+    def test_above_threshold_top3_sorted(self, tmp_path):
+        """5只>=35分，只推送前3（按总分降序）"""
         data_dir = self._setup_dirs(tmp_path)
         self._write_analysis(data_dir, "20260521_0930.json", [
             {"code": "A", "total": 80},
@@ -353,20 +353,20 @@ class TestLoadTodayAnalysisPushRule:
         assert "B" in pushed_codes
         assert "C" in pushed_codes
 
-    def test_all_below_50_no_push(self, tmp_path):
-        """全部<50分，不推送"""
+    def test_all_below_threshold_no_push(self, tmp_path):
+        """全部<35分，不推送"""
         data_dir = self._setup_dirs(tmp_path)
         self._write_analysis(data_dir, "20260521_0930.json", [
-            {"code": "A", "total": 40},
-            {"code": "B", "total": 30},
+            {"code": "A", "total": 30},
+            {"code": "B", "total": 25},
             {"code": "C", "total": 20},
         ])
         with patch("scripts.zt_daily_review.PROJECT_DIR", tmp_path):
             all_items, pushed_items = load_today_analysis("20260521")
         assert pushed_items == []
 
-    def test_exactly_3_above_50(self, tmp_path):
-        """恰好3只>=50，全部推送"""
+    def test_exactly_3_above_threshold(self, tmp_path):
+        """恰好3只>=35，全部推送"""
         data_dir = self._setup_dirs(tmp_path)
         self._write_analysis(data_dir, "20260521_0930.json", [
             {"code": "A", "total": 80},
@@ -377,13 +377,13 @@ class TestLoadTodayAnalysisPushRule:
             all_items, pushed_items = load_today_analysis("20260521")
         assert len(pushed_items) == 3
 
-    def test_1_above_50_and_many_below(self, tmp_path):
-        """1只>=50 + 多只<50，只推1只"""
+    def test_1_above_threshold_and_many_below(self, tmp_path):
+        """1只>=35 + 多只<35，只推1只"""
         data_dir = self._setup_dirs(tmp_path)
         self._write_analysis(data_dir, "20260521_0930.json", [
             {"code": "A", "total": 55},
-            {"code": "B", "total": 40},
-            {"code": "C", "total": 30},
+            {"code": "B", "total": 30},
+            {"code": "C", "total": 25},
             {"code": "D", "total": 20},
         ])
         with patch("scripts.zt_daily_review.PROJECT_DIR", tmp_path):
@@ -399,29 +399,29 @@ class TestLoadTodayAnalysisPushRule:
             {"code": "C", "total": 60},
             {"code": "A", "total": 80},
             {"code": "B", "total": 70},
-            {"code": "D", "total": 40},
+            {"code": "D", "total": 30},
         ])
         with patch("scripts.zt_daily_review.PROJECT_DIR", tmp_path):
             all_items, pushed_items = load_today_analysis("20260521")
         totals = [p["total"] for p in pushed_items]
         assert totals == sorted(totals, reverse=True)
 
-    def test_boundary_50_included(self, tmp_path):
-        """总分=50的股票应被推送"""
+    def test_boundary_35_included(self, tmp_path):
+        """总分=35的股票应被推送"""
         data_dir = self._setup_dirs(tmp_path)
         self._write_analysis(data_dir, "20260521_0930.json", [
-            {"code": "A", "total": 50},
+            {"code": "A", "total": 35},
         ])
         with patch("scripts.zt_daily_review.PROJECT_DIR", tmp_path):
             all_items, pushed_items = load_today_analysis("20260521")
         assert len(pushed_items) == 1
         assert pushed_items[0]["code"] == "A"
 
-    def test_boundary_49_excluded(self, tmp_path):
-        """总分=49的股票不应被推送"""
+    def test_boundary_34_excluded(self, tmp_path):
+        """总分=34的股票不应被推送"""
         data_dir = self._setup_dirs(tmp_path)
         self._write_analysis(data_dir, "20260521_0930.json", [
-            {"code": "A", "total": 49},
+            {"code": "A", "total": 34},
         ])
         with patch("scripts.zt_daily_review.PROJECT_DIR", tmp_path):
             all_items, pushed_items = load_today_analysis("20260521")
@@ -430,12 +430,12 @@ class TestLoadTodayAnalysisPushRule:
     def test_multi_slot_accumulation(self, tmp_path):
         """多时段累加：每时段独立取前3，跨时段累加去重"""
         data_dir = self._setup_dirs(tmp_path)
-        # 时段1: A(80), B(70) >= 50
+        # 时段1: A(80), B(70) >= 35
         self._write_analysis(data_dir, "20260521_0930.json", [
             {"code": "A", "total": 80},
             {"code": "B", "total": 70},
         ])
-        # 时段2: C(90), D(60) >= 50
+        # 时段2: C(90), D(60) >= 35
         self._write_analysis(data_dir, "20260521_1000.json", [
             {"code": "C", "total": 90},
             {"code": "D", "total": 60},
@@ -443,5 +443,5 @@ class TestLoadTodayAnalysisPushRule:
         with patch("scripts.zt_daily_review.PROJECT_DIR", tmp_path):
             all_items, pushed_items = load_today_analysis("20260521")
         pushed_codes = {p["code"] for p in pushed_items}
-        # 4只都>=50，跨时段累加去重后应全部在推送池
+        # 4只都>=35，跨时段累加去重后应全部在推送池
         assert pushed_codes == {"A", "B", "C", "D"}

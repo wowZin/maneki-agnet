@@ -105,7 +105,7 @@ def load_today_analysis(today: str) -> tuple:
     返回 (all_analysis, pushed_analysis)：
       - all_analysis: 全部分析结果（每只股票取最佳分数版本，用于维度统计和置信度分布）
       - pushed_analysis: 今日实际推送给用户的股票（累加去重，用于命中率计算）
-    推送定义：综合分>=50取前3只（按总分降序），无>=50时不推送。
+    推送定义：综合分>=35取前3只（按总分降序），无>=35时不推送。
     推送池构建方式：每个时段独立应用推送规则，然后跨时段累加去重。
     """
     analysis_dir = PROJECT_DIR / "data" / "analysis"
@@ -126,12 +126,12 @@ def load_today_analysis(today: str) -> tuple:
                 if code not in stock_best or total > stock_best[code].get("total", 0):
                     stock_best[code] = item
             # 对本时段独立应用推送规则
-            above_50 = sorted(
-                [item for item in data if item.get("total", 0) >= 50],
+            above_threshold = sorted(
+                [item for item in data if item.get("total", 0) >= 35],
                 key=lambda x: x.get("total", 0), reverse=True
             )[:3]
-            if above_50:
-                slot_push = above_50
+            if above_threshold:
+                slot_push = above_threshold
             else:
                 slot_push = []
             per_slot_pushed.extend(slot_push)
