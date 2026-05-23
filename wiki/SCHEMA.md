@@ -1,14 +1,38 @@
-# Wiki Schema — Maneki 股票分析知识库
+# Wiki Schema — Maneki 知识库
 
 ## Domain
 
-A股涨停预测系统。覆盖扫描策略、五维度评分体系、权重优化、复盘机制。
+A股量化策略。按玩法分目录管理，每个玩法独立的数据和知识。
+
+## Directory Structure
+
+```
+wiki/
+├── SCHEMA.md              # 本文件
+├── index.md               # 内容索引
+├── log.md                 # 操作日志
+├── concepts/              # 跨玩法通用知识
+│   ├── 五维度评分体系.md
+│   ├── 评估指标说明.md
+│   └── ...
+├── plays/                 # 玩法专属数据
+│   ├── limit-up/
+│   │   └── entities/      # 每日编译汇总
+│   └── xxx/               # 其他玩法
+├── queries/               # FAQ
+└── raw/                   # 原始数据（不可变）
+    ├── articles/
+    ├── signals/
+    ├── analysis/
+    ├── reports/
+    └── weights/
+```
 
 ## Conventions
 
 - File names: lowercase-hyphens, no spaces
 - Every wiki page starts with YAML frontmatter
-- Use `[[wikilinks]]` to cross-reference (minimum 2 outbound links per page)
+- Use `[[plays/xxx/path]]` for cross-play links
 - New pages must be added to `index.md`
 - Every action appended to `log.md`
 
