@@ -146,10 +146,16 @@ def is_non_stock_message(text: str) -> bool:
 
 def detect_follow_up(text: str, last_data: dict | None) -> tuple[str | None, str | None]:
     """检测是否为追问某个指标详情
-    返回: (维度名, 提示文本) 或 (None, None)
+    返回: (维度名/rating, 提示文本) 或 (None, None)
     """
     if not last_data:
         return None, None
+
+    # 评级追问：评分/星级/评级
+    rating_keywords = ["评分", "星级", "评级", "星"]
+    for kw in rating_keywords:
+        if kw in text:
+            return "rating", None
 
     # 检查文本中是否包含维度关键词
     matched_dims = []
@@ -160,10 +166,9 @@ def detect_follow_up(text: str, last_data: dict | None) -> tuple[str | None, str
                 break
 
     if matched_dims:
-        # 取匹配到的第一个维度
         return matched_dims[0], None
 
-    # 通用追问："详细说说"、"为什么"、"解释一下"
+    # 通用追问
     detail_patterns = ["为什么", "解释", "详细", "说说", "怎么回事", "具体"]
     for p in detail_patterns:
         if p in text:
@@ -216,6 +221,60 @@ def get_dim_explanation(dim: str, score: float, reason: str) -> str:
         level_desc = info["low"]
 
     return f"**{info['name']} ({score:.0f}分) — {level_desc}**\n评分依据: {reason or '暂无详细数据'}"
+
+
+def get_rating_explanation(result: dict) -> str:
+    """解释综合评级的含义和构成"""
+    total = result["total"]
+    scores = result["scores"]
+    reasons = result["reasons"]
+
+    # 星级
+    stars = _stars(total)
+    if total >= 55: level = "优秀 ⭐⭐⭐⭐⭐"
+    elif total >= 45: level = "良好 ⭐⭐⭐⭐"
+    elif total >= 35: level = "中等 ⭐⭐⭐"
+    else: level = "偏弱"
+
+    # 找出得分最高的维度和最低的维度
+    weighted = [(dim, scores.get(dim, 0), reasons.get(dim, "")) for dim in ["fundamental", "technical", "fundflow", "sentiment", "shortterm"]]
+    weighted.sort(key=lambda x: x[1], reverse=True)
+    best = weighted[0]
+    worst = weighted[-1]
+    dim_cn = {"fundamental":"基本面","technical":"技术面","fundflow":"资金面","sentiment":"情绪面","shortterm":"短线博弈"}
+
+    # 计算各维度的贡献方向
+    highs = [f"{dim_cn[d]}={s:.0f}分" for d, s, _ in weighted if s >= 40]
+    lows = [f"{dim_cn[d]}={s:.0f}分" for d, s, _ in weighted if s < 20]
+
+    lines = [
+        f"**{stars} 综合评级 {total:.1f}分 — {level}**\n",
+        f"**评分构成分析：**"
+    ]
+
+    if highs:
+        lines.append(f"✅ 加分项（≥40分）：{'、'.join(highs)}")
+    if lows:
+        lines.append(f"⚠️ 减分项（<20分）：{'、'.join(lows)}")
+
+    lines.append(f"\n**最强维度：{dim_cn[best[0]]}** ({best[1]:.0f}分)")
+    lines.append(f"依据：{best[2].split(';')[0] if best[2] else '无数据'}")
+
+    if worst[1] < 20:
+        lines.append(f"\n**最弱维度：{dim_cn[worst[0]]}** ({worst[1]:.0f}分)")
+        lines.append(f"依据：{worst[2].split(';')[0] if worst[2] else '无数据'}")
+
+    # 建议
+    if total >= 55:
+        lines.append("\n💡 各维度信号积极，综合评级优秀，可重点关注。")
+    elif total >= 45:
+        lines.append("\n💡 整体偏积极，可结合自身风险偏好进一步判断。")
+    elif total >= 35:
+        lines.append(f"\n💡 评级中等，主要受{dim_cn[worst[0]]}拖累，建议关注该维度改善情况。")
+    else:
+        lines.append(f"\n💡 评级偏弱，多个维度信号不强，建议保持观望。")
+
+    return "\n".join(lines)
 
 
 # ── 评分逻辑 ──────────────────────────────────────────────
@@ -489,7 +548,7 @@ def _build_result_card(stock_name: str, result: dict, quote: dict | None = None)
         short_reason = r.split(";")[0] if r else "无数据"
         score_lines.append(f"**{_dim_label(dim)} {s:.0f}分**　{short_reason}")
 
-    tip_line = "\n💡 可追问指标详情，如：\"基本面为什么这么低？\"、\"资金面详细说说\""
+    tip_line = "\n💡 可追问：\"为什么是4星？\"、\"基本面为什么这么低？\"、\"资金面详细说说\""
 
     elements = [
         {"tag": "div", "text": {"tag": "lark_md", "content": header_content}},
@@ -572,7 +631,7 @@ async def handle_message_event(event: dict):
             "  @机器人 平安银行\n"
             "  @机器人 000001.SZ\n"
             "  @机器人 贵州茅台 和 宁德时代\n\n"
-            "分析完成后可追问：\"基本面为什么这么低？\"、\"资金面详细说说\""
+            "分析完成后可追问：\"为什么是4星？\"、\"基本面为什么这么低？\"、\"资金面详细说说\""
         )
         return
 
@@ -582,7 +641,11 @@ async def handle_message_event(event: dict):
         last = _get_last_analysis(chat_id)
         dim, _ = detect_follow_up(text, last)
         if dim and last:
-            if dim == "all":
+            if dim == "rating":
+                # 评级追问
+                explanation = get_rating_explanation(last["result"])
+                await FEISHU_CLIENT.reply_text(message_id, explanation)
+            elif dim == "all":
                 # 全部维度详细解读
                 lines = []
                 for d in ["fundamental", "technical", "fundflow", "sentiment", "shortterm"]:
@@ -605,9 +668,9 @@ async def handle_message_event(event: dict):
             "  @机器人 平安银行\n"
             "  @机器人 000001.SZ\n\n"
             "或者对刚才的分析结果追问：\n"
+            "  \"为什么是4星？\"\n"
             "  \"基本面为什么这么低？\"\n"
-            "  \"技术面详细说说\"\n"
-            "  \"解释一下资金面\""
+            "  \"资金面详细说说\""
         )
         return
 
