@@ -17,33 +17,33 @@ class TestSafeFloatNone(unittest.TestCase):
     """safe_float_none: None和非法值返回None，有效值返回float"""
 
     def test_none_returns_none(self):
-        from scripts.zt_pipeline import safe_float_none
+        from plays.limit_up.pipeline import safe_float_none
         self.assertIsNone(safe_float_none(None))
 
     def test_empty_string_returns_none(self):
-        from scripts.zt_pipeline import safe_float_none
+        from plays.limit_up.pipeline import safe_float_none
         self.assertIsNone(safe_float_none(""))
 
     def test_invalid_string_returns_none(self):
-        from scripts.zt_pipeline import safe_float_none
+        from plays.limit_up.pipeline import safe_float_none
         self.assertIsNone(safe_float_none("abc"))
 
     def test_valid_string_returns_float(self):
-        from scripts.zt_pipeline import safe_float_none
+        from plays.limit_up.pipeline import safe_float_none
         self.assertEqual(safe_float_none("3.14"), 3.14)
 
     def test_int_returns_float(self):
-        from scripts.zt_pipeline import safe_float_none
+        from plays.limit_up.pipeline import safe_float_none
         self.assertEqual(safe_float_none(42), 42.0)
 
     def test_zero_returns_zero_not_none(self):
         """0必须返回0.0，不是None——区分'无数据'和'值为0'"""
-        from scripts.zt_pipeline import safe_float_none
+        from plays.limit_up.pipeline import safe_float_none
         self.assertEqual(safe_float_none(0), 0.0)
         self.assertIsNotNone(safe_float_none(0))
 
     def test_negative_returns_negative(self):
-        from scripts.zt_pipeline import safe_float_none
+        from plays.limit_up.pipeline import safe_float_none
         self.assertEqual(safe_float_none(-5.5), -5.5)
 
 

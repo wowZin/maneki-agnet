@@ -12,8 +12,8 @@ from unittest.mock import patch, MagicMock
 PROJECT_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 
-import scripts.zt_pipeline as pipeline_mod
-from scripts.zt_pipeline import push_feishu
+import plays.limit_up.pipeline as pipeline_mod
+from plays.limit_up.pipeline import push_feishu
 
 
 def _make_results(scores):

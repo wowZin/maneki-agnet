@@ -19,9 +19,9 @@ from datetime import datetime
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-ANALYSIS_DIR = PROJECT_DIR / "data" / "analysis"
+ANALYSIS_DIR = PROJECT_DIR / "plays" / "limit_up" / "data" / "analysis"
 WIKI_DIR = PROJECT_DIR / "wiki"
-ENTITIES_DIR = WIKI_DIR / "entities"
+ENTITIES_DIR = WIKI_DIR / "plays" / "limit_up" / "entities"
 INDEX_FILE = WIKI_DIR / "index.md"
 LOG_FILE = WIKI_DIR / "log.md"
 
@@ -176,21 +176,21 @@ def _sync_raw_data(trade_date: str):
     RAW_DIR = WIKI_DIR / "raw"
 
     # data/signals/ → raw/signals/
-    src_signals = PROJECT_DIR / "data" / "signals"
+    src_signals = PROJECT_DIR / "plays" / "limit_up" / "data" / "signals"
     dst_signals = RAW_DIR / "signals"
     dst_signals.mkdir(parents=True, exist_ok=True)
     for f in sorted(src_signals.glob(f"{trade_date}*.json"))[-5:]:  # 取最近5次
         shutil.copy2(f, dst_signals / f.name)
 
     # data/reports/ → raw/reports/
-    src_reports = PROJECT_DIR / "data" / "reports"
+    src_reports = PROJECT_DIR / "plays" / "limit_up" / "data" / "reports"
     dst_reports = RAW_DIR / "reports"
     dst_reports.mkdir(parents=True, exist_ok=True)
     for f in src_reports.glob(f"{trade_date}*"):
         shutil.copy2(f, dst_reports / f.name)
 
     # data/analysis/ → raw/analysis/（取最近2次）
-    src_analysis = PROJECT_DIR / "data" / "analysis"
+    src_analysis = PROJECT_DIR / "plays" / "limit_up" / "data" / "analysis"
     dst_analysis = RAW_DIR / "analysis"
     dst_analysis.mkdir(parents=True, exist_ok=True)
     for f in sorted(src_analysis.glob(f"{trade_date}*.json"))[-2:]:
@@ -199,8 +199,8 @@ def _sync_raw_data(trade_date: str):
 
 def _compile_signal_analysis(trade_date: str) -> str:
     """编译扫描信号与报告数据"""
-    SIGNALS_DIR = PROJECT_DIR / "data" / "signals"
-    REPORTS_DIR = PROJECT_DIR / "data" / "reports"
+    SIGNALS_DIR = PROJECT_DIR / "plays" / "limit_up" / "data" / "signals"
+    REPORTS_DIR = PROJECT_DIR / "plays" / "limit_up" / "data" / "reports"
 
     # 统计信号文件
     signal_files = sorted(SIGNALS_DIR.glob(f"{trade_date}*.json"))
@@ -235,7 +235,7 @@ def _compile_signal_analysis(trade_date: str) -> str:
 
 def _compile_weight_analysis(trade_date: str) -> str:
     """编译权重优化结果"""
-    weight_file = PROJECT_DIR / "data" / "weights" / "ranking_optimized.json"
+    weight_file = PROJECT_DIR / "plays" / "limit_up" / "data" / "weights" / "ranking_optimized.json"
     if not weight_file.exists():
         return ""
 
@@ -267,7 +267,7 @@ def _compile_push_analysis(trade_date: str) -> str:
     import requests, os
     from pathlib import Path
 
-    PUSHED_DIR = PROJECT_DIR / "data" / "pushed"
+    PUSHED_DIR = PROJECT_DIR / "plays" / "limit_up" / "data" / "pushed"
 
     # 读取当日所有推送记录
     pushed_files = sorted(PUSHED_DIR.glob(f"{trade_date}*.json"))

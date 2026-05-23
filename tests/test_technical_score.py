@@ -21,7 +21,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
 
     def setUp(self):
         """每个测试前清空Tushare缓存，避免缓存污染"""
-        from scripts.zt_pipeline import clear_tushare_cache
+        from plays.limit_up.pipeline import clear_tushare_cache
         clear_tushare_cache()
 
     def _build_factor_response(self, items, fields=None):
@@ -74,7 +74,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_perfect_bullish_stock(self, mock_post):
         """测试完美多头股票（均线多头+放量+筹码集中）"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         # 构建完美多头数据
         day1 = self._make_stock_data(
@@ -128,7 +128,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_veto_volume_breakdown(self, mock_post):
         """测试一票否决：放量破位"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         # 收盘<MA20 且 量比>1.8
         day1 = self._make_stock_data(
@@ -166,7 +166,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_veto_shrinkage_decline_v11(self, mock_post):
         """V1.1测试：持续缩量阴跌（量比<0.3且累计跌幅>3%才否决）"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         # 3日量比均<0.3, 累计跌幅>3%（-1.5-1.2-0.8=-3.5%）
         day1 = self._make_stock_data(
@@ -205,7 +205,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_no_veto_mild_shrinkage_v11(self, mock_post):
         """V1.1测试：量比<0.5但不<0.3，不再触发否决（偏弱不归零）"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         # 3日量比0.3-0.5之间（V1.0会否决，V1.1不否决）
         day1 = self._make_stock_data(
@@ -244,7 +244,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_no_veto_shrinkage_without_large_decline_v11(self, mock_post):
         """V1.1测试：量比<0.3但累计跌幅不足3%，不否决"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         # 3日量比均<0.3，但累计跌幅仅-1.5%（不满足>3%条件）
         day1 = self._make_stock_data(
@@ -283,7 +283,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_bearish_stock(self, mock_post):
         """测试空头排列股票（均线空头）"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         day1 = self._make_stock_data(
             close=10.0, open_p=10.1, high=10.2, low=9.8,
@@ -320,7 +320,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_data_fetch_failure(self, mock_post):
         """测试数据获取失败"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         mock_post.side_effect = Exception("Network error")
 
@@ -332,7 +332,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_empty_data(self, mock_post):
         """测试空数据"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         mock_post.return_value = MagicMock(
             json=lambda: {"data": {"fields": [], "items": []}}
@@ -346,7 +346,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_score_range(self, mock_post):
         """测试评分范围 [0, 100]"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         # 构建普通数据
         day1 = self._make_stock_data(
@@ -384,7 +384,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_reason_contains_level(self, mock_post):
         """测试reason包含评级标识"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         day1 = self._make_stock_data(
             close=10.5, open_p=10.3, high=10.6, low=10.2,
@@ -422,7 +422,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_washout_and_breakout(self, mock_post):
         """测试洗盘起爆信号（前两日缩量+当日放量）"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         # 当日放量，前两日缩量
         day1 = self._make_stock_data(
@@ -461,7 +461,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_deduct_low_vol_ratio_no_penalty_v11(self, mock_post):
         """V1.1测试：量比<1.5不扣分，仅不加分"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         # 量比=1.2（<1.5但>0），不加分也不扣分
         day1 = self._make_stock_data(
@@ -502,7 +502,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_deduct_abnormal_volume_v11(self, mock_post):
         """V1.1测试：量比>6.0扣5分（而非V1.0的10分）"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         # 量比=8.0（异常放量）
         day1 = self._make_stock_data(
@@ -541,7 +541,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_deduct_turnover_weak_v11(self, mock_post):
         """V1.1测试：换手率<1.5%扣5分（而非V1.0的10分）"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         # 换手率=1.0%（无量拉升）
         day1 = self._make_stock_data(
@@ -580,7 +580,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_deduct_bearish_trend_v11(self, mock_post):
         """V1.1测试：均线空头扣10分而非15分"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         # 均线空头排列: MA5<MA10<MA20
         day1 = self._make_stock_data(
@@ -622,7 +622,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_chip_dispersion_deduct_v11(self, mock_post):
         """V1.1测试：筹码发散扣5分而非10分"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         # BOLL带宽>25%表示筹码发散
         day1 = self._make_stock_data(
@@ -671,7 +671,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_veto_chip_boll_width_50_v11(self, mock_post):
         """V1.1测试：BOLL代理筹码发散否决阈值从30%放宽至50%"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         # BOLL带宽=40%（V1.0会否决，V1.1不否决）
         day1 = self._make_stock_data(
@@ -713,7 +713,7 @@ class TestTechnicalScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_ma60_decline_deduct_v11(self, mock_post):
         """V1.1测试：MA60下倾扣5分而非10分"""
-        from scripts.zt_pipeline import score_technical
+        from plays.limit_up.pipeline import score_technical
 
         # MA60下倾: 今日MA60<5日前MA60
         day1 = self._make_stock_data(
@@ -767,7 +767,7 @@ class TestTechnicalAgentV11(unittest.TestCase):
     """测试 technical_agent.py 的 V1.1 修改"""
 
     def setUp(self):
-        from scripts.zt_pipeline import clear_tushare_cache
+        from plays.limit_up.pipeline import clear_tushare_cache
         clear_tushare_cache()
 
     def _make_factor_row(self, close=10.0, open_p=10.1, high=10.2, low=9.9,
@@ -791,7 +791,7 @@ class TestTechnicalAgentV11(unittest.TestCase):
 
     def test_veto_shrinkage_v11_strict(self):
         """V1.1否决4: 量比<0.3+跌幅>3%才否决"""
-        from scripts.agents.technical_agent import check_veto_rules
+        from plays.limit_up.agents.technical_agent import check_veto_rules
 
         # 量比均<0.3, 累计跌幅>3% → 应否决
         factors = [
@@ -808,7 +808,7 @@ class TestTechnicalAgentV11(unittest.TestCase):
 
     def test_veto_shrinkage_v11_mild_not_vetoed(self):
         """V1.1否决4: 量比0.3-0.5之间不否决"""
-        from scripts.agents.technical_agent import check_veto_rules
+        from plays.limit_up.agents.technical_agent import check_veto_rules
 
         # 量比0.4（V1.0否决，V1.1不否决）
         factors = [
@@ -824,7 +824,7 @@ class TestTechnicalAgentV11(unittest.TestCase):
 
     def test_veto_chip_boll_50_threshold(self):
         """V1.1否决3: BOLL带宽>50%才否决（从30%放宽）"""
-        from scripts.agents.technical_agent import check_veto_rules
+        from plays.limit_up.agents.technical_agent import check_veto_rules
 
         # BOLL带宽=40%（不否决）
         factors = [
@@ -839,7 +839,7 @@ class TestTechnicalAgentV11(unittest.TestCase):
 
     def test_veto_chip_boll_over_50(self):
         """V1.1否决3: BOLL带宽>50%应否决"""
-        from scripts.agents.technical_agent import check_veto_rules
+        from plays.limit_up.agents.technical_agent import check_veto_rules
 
         # BOLL带宽=60%（应否决）
         factors = [
@@ -856,7 +856,7 @@ class TestTechnicalAgentV11(unittest.TestCase):
 
     def test_score_deduct_turnover_weak_v11(self):
         """V1.1评分: 换手率<1.5%扣5分而非10分"""
-        from scripts.agents.technical_agent import calc_volume_score
+        from plays.limit_up.agents.technical_agent import calc_volume_score
 
         # 换手率=1.0%（无量拉升），factor_data需>=3条
         factor_data = [
@@ -873,7 +873,7 @@ class TestTechnicalAgentV11(unittest.TestCase):
 
     def test_score_deduct_bearish_v11(self):
         """V1.1评分: 均线空头扣10分而非15分"""
-        from scripts.agents.technical_agent import calc_trend_score
+        from plays.limit_up.agents.technical_agent import calc_trend_score
 
         # 均线空头: MA5<MA10<MA20，需要>=5条数据让calc_trend_score正常工作
         factors = [self._make_factor_row(ma5=10.1, ma10=10.3, ma20=10.6, ma60=11.0) for _ in range(5)]

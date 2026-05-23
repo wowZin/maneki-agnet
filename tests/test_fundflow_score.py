@@ -31,7 +31,7 @@ class TestFundflowScoreV1(unittest.TestCase):
 
     def setUp(self):
         """每个测试前清空Tushare缓存，避免缓存污染"""
-        from scripts.zt_pipeline import clear_tushare_cache
+        from plays.limit_up.pipeline import clear_tushare_cache
         clear_tushare_cache()
 
     def _mock_requests_post(self, responses_map):
@@ -130,7 +130,7 @@ class TestFundflowVeto(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         self.assertEqual(score, 0)
         self.assertIn("否决", reason)
@@ -154,7 +154,7 @@ class TestFundflowVeto(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         self.assertEqual(score, 0)
         self.assertIn("否决", reason)
@@ -181,7 +181,7 @@ class TestFundflowVeto(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         self.assertEqual(score, 0)
         self.assertIn("否决", reason)
@@ -209,7 +209,7 @@ class TestFundflowDimensions(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         self.assertGreaterEqual(score, 35, f"强主力流入应得高分，实际{score}, 原因: {reason}")
         self.assertIn("[主力", reason)
@@ -235,7 +235,7 @@ class TestFundflowDimensions(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         self.assertIn("[龙虎", reason)
         self.assertGreaterEqual(score, 25)
@@ -259,7 +259,7 @@ class TestFundflowDimensions(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         # V2.0: 维度4标签从[北向]改为[融资]
         self.assertIn("[融资", reason)
@@ -280,7 +280,7 @@ class TestFundflowDimensions(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         self.assertIn("[盘口", reason)
         self.assertGreaterEqual(score, 16)
@@ -305,7 +305,7 @@ class TestFundflowDimensions(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         self.assertIn("[锁仓", reason)
         # V2.0: 递增+7 + 无抛压+3 + 加速+3 = 13分
@@ -323,7 +323,7 @@ class TestFundflowDimensions(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         self.assertEqual(score, 0)
         self.assertIn("无", reason)
@@ -346,7 +346,7 @@ class TestFundflowDimensions(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         self.assertEqual(score, 0)
 
@@ -377,7 +377,7 @@ class TestFundflowV2Features(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         # 一字板豁免否决，不应返回0分
         self.assertGreater(score, 0, f"一字板应豁免否决，实际得分{score}, 原因: {reason}")
@@ -410,7 +410,7 @@ class TestFundflowV2Features(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         # 低迷市调节器生效，否决3阈值放宽，可能不触发
         # 主要验证不抛异常
@@ -436,7 +436,7 @@ class TestFundflowV2Features(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         # 解析reason中[融资X分]，X应<=7
         import re
@@ -465,7 +465,7 @@ class TestFundflowV2Features(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         import re
         match = re.search(r'\[锁仓(\d+)分\]', reason)
@@ -497,7 +497,7 @@ class TestFundflowV2Features(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         # 5%-10%不应否决（score>0）
         self.assertGreater(score, 0, f"主力占比5%-10%不应否决，实际得分{score}, 原因: {reason}")
@@ -527,7 +527,7 @@ class TestFundflowV2Features(TestFundflowScoreV1):
         }
         mock_post.side_effect = self._mock_requests_post(responses)
 
-        from scripts.zt_pipeline import score_fundflow
+        from plays.limit_up.pipeline import score_fundflow
         score, reason = score_fundflow("600000.SH")
         # 不应被否决(占比>5%)
         self.assertGreater(score, 0, f"主力占比>5%不应否决，实际得分{score}, 原因: {reason}")
