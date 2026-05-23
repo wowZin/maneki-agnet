@@ -23,3 +23,6 @@
 ## [2026-05-23] compile | 知识库就绪
 - Total pages: 7 concepts + 20 raw sources
 - Bot 集成完成：关键词映射 + grep 搜索双重查询
+
+## [2026-05-23] compile | 20260522 扫描汇总
+- Created: entities/20260522-扫描汇总.md — 620 只股票, 总分均值 25.5

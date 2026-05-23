@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+"""wiki compile — 每日收盘后将当日扫描数据编译为知识库页面
+
+触发时机：收盘复盘后（18:00）
+流程：
+  1. 读取当日 data/analysis/ 最新评分数据
+  2. 统计关键指标：扫描总数、涨停覆盖、各维度均分
+  3. 写入 wiki/entities/ 当日汇总页面
+  4. 更新 index.md 和 log.md
+
+用法：
+  python3 wiki/compile.py [--date 20260522]
+"""
+
+import json
+import sys
+from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
+
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+ANALYSIS_DIR = PROJECT_DIR / "data" / "analysis"
+WIKI_DIR = PROJECT_DIR / "wiki"
+ENTITIES_DIR = WIKI_DIR / "entities"
+INDEX_FILE = WIKI_DIR / "index.md"
+LOG_FILE = WIKI_DIR / "log.md"
+
+DIMS = ["fundamental", "technical", "fundflow", "sentiment", "shortterm"]
+DIM_CN = {"fundamental": "基本面", "technical": "技术面", "fundflow": "资金面",
+          "sentiment": "情绪面", "shortterm": "短线博弈"}
+WEIGHTS = {"fundamental": 1.5, "technical": 1.0, "fundflow": 1.0, "sentiment": 1.2, "shortterm": 1.5}
+
+
+def weighted_top3(scores, w):
+    contribs = [(scores.get(d, 0) or 0, w.get(d, 1.0)) for d in DIMS]
+    contribs.sort(key=lambda x: x[0] * x[1], reverse=True)
+    top3 = contribs[:3]
+    return sum(s * w for s, w in top3) / sum(w for _, w in top3) if sum(w for _, w in top3) > 0 else 0
+
+
+def compile_day(trade_date: str):
+    """编译某交易日的扫描数据"""
+    # 读取当日分析文件
+    records = []
+    for f in sorted(ANALYSIS_DIR.glob(f"{trade_date}*.json")):
+        with open(f) as fh:
+            d = json.load(fh)
+        if isinstance(d, list):
+            records.extend(d)
+
+    if not records:
+        print(f"  {trade_date}: 无数据")
+        return False
+
+    # 去重
+    seen = set()
+    unique = []
+    for r in records:
+        code = r.get("code", "").split(".")[0]
+        if code and code not in seen:
+            seen.add(code)
+            unique.append(r)
+    records = unique
+
+    # 统计
+    n = len(records)
+    scores_by_dim = defaultdict(list)
+    total_scores = []
+    stars_dist = {"⭐⭐⭐⭐⭐": 0, "⭐⭐⭐⭐": 0, "⭐⭐⭐": 0, "不评级": 0}
+
+    for r in records:
+        scores = r.get("scores", {})
+        total = weighted_top3(scores, WEIGHTS)
+        total_scores.append(total)
+
+        for d in DIMS:
+            s = scores.get(d, 0)
+            if s is not None:
+                scores_by_dim[d].append(s)
+
+        if total >= 55:
+            stars_dist["⭐⭐⭐⭐⭐"] += 1
+        elif total >= 45:
+            stars_dist["⭐⭐⭐⭐"] += 1
+        elif total >= 35:
+            stars_dist["⭐⭐⭐"] += 1
+        else:
+            stars_dist["不评级"] += 1
+
+    # 维度均分
+    dim_avgs = {}
+    for d in DIMS:
+        vals = scores_by_dim[d]
+        dim_avgs[d] = round(sum(vals) / len(vals), 1) if vals else 0
+
+    # Top 10 股票
+    scored = [(r.get("code", "").split(".")[0], r.get("name", ""), weighted_top3(r.get("scores", {}), WEIGHTS))
+              for r in records]
+    scored.sort(key=lambda x: x[2], reverse=True)
+    top10 = scored[:10]
+
+    # 编译页面
+    date_display = f"{trade_date[:4]}-{trade_date[4:6]}-{trade_date[6:]}"
+    dim_avg_line = "  ".join(f"{DIM_CN[d]}={dim_avgs[d]:.0f}" for d in DIMS)
+    total_avg = round(sum(total_scores) / len(total_scores), 1) if total_scores else 0
+
+    content = f"""---
+title: {date_display} 扫描汇总
+created: {datetime.now().strftime("%Y-%m-%d")}
+updated: {datetime.now().strftime("%Y-%m-%d")}
+type: summary
+tags: [daily, scan]
+---
+
+# {date_display} 扫描汇总
+
+## 基础数据
+
+| 指标 | 值 |
+|------|:---:|
+| 扫描股票总数 | {n} 只 |
+| 总分均值 | {total_avg} |
+| 维度均分 | {dim_avg_line} |
+
+## 星级分布
+
+| 星级 | 数量 | 占比 |
+|------|:---:|:----:|
+| ⭐⭐⭐⭐⭐ (≥55) | {stars_dist["⭐⭐⭐⭐⭐"]} | {round(stars_dist["⭐⭐⭐⭐⭐"]/n*100,1) if n else 0}% |
+| ⭐⭐⭐⭐ (≥45) | {stars_dist["⭐⭐⭐⭐"]} | {round(stars_dist["⭐⭐⭐⭐"]/n*100,1) if n else 0}% |
+| ⭐⭐⭐ (≥35) | {stars_dist["⭐⭐⭐"]} | {round(stars_dist["⭐⭐⭐"]/n*100,1) if n else 0}% |
+| 不评级 (<35) | {stars_dist["不评级"]} | {round(stars_dist["不评级"]/n*100,1) if n else 0}% |
+
+## Top 10 股票
+
+| 排名 | 代码 | 名称 | 总分 |
+|:---:|:----:|:----:|:----:|
+""" + "\n".join(f"| {i+1} | {c} | {n} | {s:.1f} |" for i, (c, n, s) in enumerate(top10))
+
+    # 写入文件
+    page_name = f"{trade_date}-扫描汇总.md"
+    page_path = ENTITIES_DIR / page_name
+    page_path.write_text(content, encoding="utf-8")
+    print(f"  ✅ {page_name} — {n}只股票, 总分均值{total_avg}")
+
+    # 更新 index.md
+    update_index(trade_date, date_display, page_name, n)
+
+    # 更新 log.md
+    update_log(trade_date, page_name, n, total_avg)
+
+    return True
+
+
+def update_index(trade_date: str, date_display: str, page_name: str, count: int):
+    """在 index.md 的 Entities 节追加当日记录"""
+    if not INDEX_FILE.exists():
+        return
+
+    content = INDEX_FILE.read_text(encoding="utf-8")
+
+    # 检查是否已存在当天的记录
+    if f"[[{page_name}]]" in content:
+        return  # 已存在，跳过
+
+    # 在 Entities 节追加
+    marker = "## Entities"
+    new_entry = f"- [[{page_name}]] — {date_display} 扫描 {count} 只股票"
+    if marker in content:
+        # 找到 Entities 节末尾
+        lines = content.split("\n")
+        new_lines = []
+        in_entities = False
+        inserted = False
+        for line in lines:
+            new_lines.append(line)
+            if line.startswith("## Entities"):
+                in_entities = True
+            elif in_entities and line.startswith("## "):
+                if not inserted:
+                    new_lines.append(new_entry)
+                    inserted = True
+                in_entities = False
+        if not inserted:
+            new_lines.append(new_entry)
+        content = "\n".join(new_lines)
+
+    # 更新页数统计
+    import re
+    total_match = re.search(r"Total pages: (\d+)", content)
+    if total_match:
+        old_total = int(total_match.group(1))
+        content = content.replace(f"Total pages: {old_total}", f"Total pages: {old_total + 1}")
+
+    INDEX_FILE.write_text(content, encoding="utf-8")
+
+
+def update_log(trade_date: str, page_name: str, count: int, avg_score: float):
+    """追加 log.md"""
+    entry = f"\n## [{datetime.now().strftime('%Y-%m-%d')}] compile | {trade_date} 扫描汇总\n- Created: entities/{page_name} — {count} 只股票, 总分均值 {avg_score}\n"
+    with open(LOG_FILE, "a") as f:
+        f.write(entry)
+
+
+def main():
+    # 默认取最近交易日
+    target_date = ""
+    for arg in sys.argv[1:]:
+        if arg.startswith("--date="):
+            target_date = arg.split("=")[1]
+
+    if not target_date:
+        # 从分析文件找最近日期
+        files = sorted(ANALYSIS_DIR.glob("*.json"))
+        if files:
+            target_date = files[-1].stem.split("_")[0]
+
+    if not target_date:
+        print("❌ 无数据")
+        return
+
+    print(f"📊 wiki compile — {target_date}")
+    compile_day(target_date)
+    print("✅ 编译完成")
+
+
+if __name__ == "__main__":
+    main()
