@@ -445,8 +445,9 @@ def _dim_label(dim: str) -> str:
 
 
 def _stars(total: float) -> str:
-    if total >= 50: return "⭐ ⭐ ⭐ ⭐ ⭐"
-    if total >= 40: return "⭐ ⭐ ⭐ ⭐"
+    """星级: >=55:5星 >=45:4星 >=35:3星"""
+    if total >= 55: return "⭐ ⭐ ⭐ ⭐ ⭐"
+    if total >= 45: return "⭐ ⭐ ⭐ ⭐"
     if total >= 35: return "⭐ ⭐ ⭐"
     return "- 不评级"
 

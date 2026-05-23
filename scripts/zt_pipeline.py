@@ -3166,11 +3166,10 @@ def push_feishu(results):
     import requests
 
     def _stars(total):
-        """综合评级: >=50 ⭐⭐⭐⭐⭐  >=45 ⭐⭐⭐⭐  >=40 ⭐⭐⭐  >=35 ⭐⭐"""
-        if total >= 50: return "⭐ ⭐ ⭐ ⭐ ⭐"
+        """综合评级: >=55 ⭐⭐⭐⭐⭐  >=45 ⭐⭐⭐⭐  >=35 ⭐⭐⭐"""
+        if total >= 55: return "⭐ ⭐ ⭐ ⭐ ⭐"
         if total >= 45: return "⭐ ⭐ ⭐ ⭐"
-        if total >= 40: return "⭐ ⭐ ⭐"
-        if total >= 35: return "⭐ ⭐"
+        if total >= 35: return "⭐ ⭐ ⭐"
         return ""
 
     # 推送筛选 (V2.6: 加权Top3择优，阈值35)
