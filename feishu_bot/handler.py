@@ -602,7 +602,7 @@ def _get_stock_name(code: str) -> str:
 WIKI_PATH = Path(__file__).resolve().parent.parent / "wiki"
 
 def _query_wiki(text: str) -> str | None:
-    """从 wiki 知识库查找匹配内容"""
+    """从 wiki 知识库查找匹配内容（关键词映射 + 文件搜索兜底）"""
     # 关键词 → wiki 页面映射
     wiki_map = {
         "AUC": "评估指标说明.md",
@@ -649,6 +649,14 @@ def _query_wiki(text: str) -> str | None:
         "资金面": "五维度评分体系.md",
         "情绪面": "五维度评分体系.md",
         "短线博弈": "五维度评分体系.md",
+        "否决": "子策略说明.md",
+        "熔断": "子策略说明.md",
+        "封板": "子策略说明.md",
+        "连板": "子策略说明.md",
+        "龙虎榜": "子策略说明.md",
+        "竞价": "子策略说明.md",
+        "AB对比": "AB对比机制.md",
+        "AB双跑": "AB对比机制.md",
     }
 
     # 找匹配的 wiki 页面
@@ -657,19 +665,32 @@ def _query_wiki(text: str) -> str | None:
         if kw in text:
             matched_pages.add(page)
 
+    # 如果关键词没匹配到，尝试文件搜索兜底
+    if not matched_pages:
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["grep", "-rli", text, str(WIKI_PATH / "concepts")],
+                capture_output=True, text=True, timeout=3
+            )
+            if result.stdout.strip():
+                matched_pages = set(
+                    Path(p).name for p in result.stdout.strip().split("\n")
+                )
+        except Exception:
+            pass
+
     if not matched_pages:
         return None
 
     # 读取匹配的页面内容
     answers = []
-    for page in sorted(matched_pages)[:2]:  # 最多读 2 个
+    for page in sorted(matched_pages)[:2]:
         page_path = WIKI_PATH / "concepts" / page
         if page_path.exists():
             content = page_path.read_text(encoding="utf-8")
-            # 提取 frontmatter 后的内容
             parts = content.split("---", 2)
             body = parts[2].strip() if len(parts) >= 3 else content
-            # 取前 60 行
             lines = body.split("\n")
             body_preview = "\n".join(lines[:60])
             answers.append(body_preview)

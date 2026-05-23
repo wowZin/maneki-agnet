@@ -1,7 +1,7 @@
 # Wiki Index
 
 > Content catalog. Every wiki page listed under its type with a one-line summary.
-> Last updated: 2026-05-23 | Total pages: 6
+> Last updated: 2026-05-23 | Total pages: 8
 
 ## Concepts
 
@@ -10,9 +10,15 @@
 - [[扫描与推送机制]] — 盘中扫描流程、推送规则、定时任务
 - [[数据源说明]] — Eastmoney实时 + Tushare历史 + 代理机制
 - [[权重优化引擎]] — 排序质量优化器 optimize_ranking.py
+- [[AB对比机制]] — 新旧权重对比验证、3天固化规则
+- [[子策略说明]] — 五维度各子策略评分依据、否决机制
 
 ## Entities
 
 ## Comparisons
 
 ## Queries
+
+## Raw Sources (20 files)
+
+- `docs/*.md` → `raw/articles/` — 全部项目文档（agent策略、架构、风控等）

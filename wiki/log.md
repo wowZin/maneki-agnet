@@ -13,3 +13,13 @@
 - Created: concepts/扫描与推送机制.md — 扫描流程+推送规则
 - Created: concepts/数据源说明.md — Eastmoney/Tushare/代理
 - Created: concepts/权重优化引擎.md — optimize_ranking 说明
+
+## [2026-05-23] ingest | 批量导入项目文档
+- Copied 20 docs files → raw/articles/ (agent策略、架构、风控等)
+- Created: concepts/AB对比机制.md — 权重AB对比+3天固化规则
+- Created: concepts/子策略说明.md — 五维度子策略评分依据+否决机制
+- Updated: _query_wiki() — 新增文件搜索兜底能力
+
+## [2026-05-23] compile | 知识库就绪
+- Total pages: 7 concepts + 20 raw sources
+- Bot 集成完成：关键词映射 + grep 搜索双重查询
