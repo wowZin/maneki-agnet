@@ -597,6 +597,89 @@ def _get_stock_name(code: str) -> str:
     return code.split(".")[0]
 
 
+# ── 知识库查询 ─────────────────────────────────────────────
+
+WIKI_PATH = Path(__file__).resolve().parent.parent / "wiki"
+
+def _query_wiki(text: str) -> str | None:
+    """从 wiki 知识库查找匹配内容"""
+    # 关键词 → wiki 页面映射
+    wiki_map = {
+        "AUC": "评估指标说明.md",
+        "auc": "评估指标说明.md",
+        "涨停均排": "评估指标说明.md",
+        "均排": "评估指标说明.md",
+        "信号池": "评估指标说明.md",
+        "分差": "评估指标说明.md",
+        "覆盖率": "评估指标说明.md",
+        "命中率": "评估指标说明.md",
+        "鉴别力": "评估指标说明.md",
+        "综合分": "评估指标说明.md",
+        "composite": "评估指标说明.md",
+        "加权Top3": "五维度评分体系.md",
+        "Top3择优": "五维度评分体系.md",
+        "加权平均": "五维度评分体系.md",
+        "评分体系": "五维度评分体系.md",
+        "五个维度": "五维度评分体系.md",
+        "星级": "五维度评分体系.md",
+        "综合评级": "五维度评分体系.md",
+        "阈值": "扫描与推送机制.md",
+        "推送规则": "扫描与推送机制.md",
+        "扫描": "扫描与推送机制.md",
+        "盘中": "扫描与推送机制.md",
+        "收盘复盘": "扫描与推送机制.md",
+        "复盘": "扫描与推送机制.md",
+        "数据源": "数据源说明.md",
+        "东财": "数据源说明.md",
+        "东方财富": "数据源说明.md",
+        "Tushare": "数据源说明.md",
+        "tushare": "数据源说明.md",
+        "代理": "数据源说明.md",
+        "权重优化": "权重优化引擎.md",
+        "优化引擎": "权重优化引擎.md",
+        "optimize": "权重优化引擎.md",
+        "维度贡献": "权重优化引擎.md",
+        "校准曲线": "权重优化引擎.md",
+        "什么是": "评估指标说明.md",
+        "怎么算": "评估指标说明.md",
+        "什么意思": "评估指标说明.md",
+        "如何计算": "评估指标说明.md",
+        "基本面": "五维度评分体系.md",
+        "技术面": "五维度评分体系.md",
+        "资金面": "五维度评分体系.md",
+        "情绪面": "五维度评分体系.md",
+        "短线博弈": "五维度评分体系.md",
+    }
+
+    # 找匹配的 wiki 页面
+    matched_pages = set()
+    for kw, page in wiki_map.items():
+        if kw in text:
+            matched_pages.add(page)
+
+    if not matched_pages:
+        return None
+
+    # 读取匹配的页面内容
+    answers = []
+    for page in sorted(matched_pages)[:2]:  # 最多读 2 个
+        page_path = WIKI_PATH / "concepts" / page
+        if page_path.exists():
+            content = page_path.read_text(encoding="utf-8")
+            # 提取 frontmatter 后的内容
+            parts = content.split("---", 2)
+            body = parts[2].strip() if len(parts) >= 3 else content
+            # 取前 60 行
+            lines = body.split("\n")
+            body_preview = "\n".join(lines[:60])
+            answers.append(body_preview)
+
+    if not answers:
+        return None
+
+    return "\n\n---\n\n".join(answers)
+
+
 # ── 主入口 ────────────────────────────────────────────────
 
 
@@ -625,17 +708,31 @@ async def handle_message_event(event: dict):
             "**我可以帮你：**\n"
             "✅ 分析某只股票，给出基本面/技术面/资金面/情绪面/短线博弈评分\n"
             "✅ 追问指标详情，解读每个维度的具体依据\n"
+            "✅ 回答股票分析知识问题（什么是AUC？怎么算的？）\n"
             "✅ 同时分析最多5只股票\n\n"
             "**使用方法：**\n"
             "@我 + 股票名称或代码，例如：\n"
             "  @机器人 平安银行\n"
             "  @机器人 000001.SZ\n"
             "  @机器人 贵州茅台 和 宁德时代\n\n"
-            "分析完成后可追问：\"为什么是4星？\"、\"基本面为什么这么低？\"、\"资金面详细说说\""
+            "分析完成后可追问：\"为什么是4星？\"、\"基本面为什么这么低？\"、\"资金面详细说说\"\n"
+            "也可直接问知识：\"什么是AUC？\"、\"涨停均排是什么意思？\""
         )
         return
 
-    # ── 2. 检测是否为追问某个指标 ──
+    # ── 1.5 知识库查询（非股票问题但可能是知识询问）──
+    wiki_keywords = ["什么是", "怎么算", "什么意思", "如何计算", "指的是",
+                     "AUC", "涨停均排", "信号池", "加权Top3", "Top3择优",
+                     "分差", "覆盖率", "命中率", "鉴别力", "阈值",
+                     "基本面", "技术面", "资金面", "情绪面", "短线博弈",
+                     "评分", "权重", "星级", "评级"]
+    need_wiki = any(kw in text for kw in wiki_keywords)
+    if need_wiki:
+        wiki_answer = _query_wiki(text)
+        if wiki_answer:
+            await FEISHU_CLIENT.reply_markdown(message_id, wiki_answer)
+            return
+
     codes = parse_stock_codes(text)
     if not codes:
         last = _get_last_analysis(chat_id)
