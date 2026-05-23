@@ -193,9 +193,10 @@ def score_momentum(code: str) -> tuple[float, str]:
                 # 检查是否有间隔
                 gaps = []
                 for i in range(1, len(dates)):
-                    d1 = int(dates[i-1])
-                    d2 = int(dates[i])
-                    gap = d1 - d2
+                    from datetime import datetime as _dt
+                    d1 = _dt.strptime(str(dates[i-1]), "%Y%m%d")
+                    d2 = _dt.strptime(str(dates[i]), "%Y%m%d")
+                    gap = (d1 - d2).days
                     if gap > 1 and gap < 10:
                         gaps.append(gap)
                 if gaps:
