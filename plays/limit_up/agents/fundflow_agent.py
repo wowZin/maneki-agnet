@@ -3,7 +3,7 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 sys.path.insert(0, str(PROJECT_DIR / "scripts"))
-from plays.limit_up.pipeline import CONFIG, call_tushare
+from plays.limit_up.pipeline import CONFIG, call_tushare, is_trading_time
 from datetime import datetime
 
 def score_fundflow(code):
