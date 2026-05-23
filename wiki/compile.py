@@ -147,6 +147,14 @@ tags: [daily, scan]
     if weight_section:
         content += "\n\n" + weight_section
 
+    # 扫描信号与报告
+    signal_section = _compile_signal_analysis(trade_date)
+    if signal_section:
+        content += "\n\n" + signal_section
+
+    # 同步原始数据到 raw/
+    _sync_raw_data(trade_date)
+
     # 写入文件
     page_name = f"{trade_date}-扫描汇总.md"
     page_path = ENTITIES_DIR / page_name
@@ -160,6 +168,69 @@ tags: [daily, scan]
     update_log(trade_date, page_name, n, total_avg)
 
     return True
+
+
+def _sync_raw_data(trade_date: str):
+    """将当日原始数据文件同步到 wiki/raw/，供 grep 搜索"""
+    import shutil
+    RAW_DIR = WIKI_DIR / "raw"
+
+    # data/signals/ → raw/signals/
+    src_signals = PROJECT_DIR / "data" / "signals"
+    dst_signals = RAW_DIR / "signals"
+    dst_signals.mkdir(parents=True, exist_ok=True)
+    for f in sorted(src_signals.glob(f"{trade_date}*.json"))[-5:]:  # 取最近5次
+        shutil.copy2(f, dst_signals / f.name)
+
+    # data/reports/ → raw/reports/
+    src_reports = PROJECT_DIR / "data" / "reports"
+    dst_reports = RAW_DIR / "reports"
+    dst_reports.mkdir(parents=True, exist_ok=True)
+    for f in src_reports.glob(f"{trade_date}*"):
+        shutil.copy2(f, dst_reports / f.name)
+
+    # data/analysis/ → raw/analysis/（取最近2次）
+    src_analysis = PROJECT_DIR / "data" / "analysis"
+    dst_analysis = RAW_DIR / "analysis"
+    dst_analysis.mkdir(parents=True, exist_ok=True)
+    for f in sorted(src_analysis.glob(f"{trade_date}*.json"))[-2:]:
+        shutil.copy2(f, dst_analysis / f.name)
+
+
+def _compile_signal_analysis(trade_date: str) -> str:
+    """编译扫描信号与报告数据"""
+    SIGNALS_DIR = PROJECT_DIR / "data" / "signals"
+    REPORTS_DIR = PROJECT_DIR / "data" / "reports"
+
+    # 统计信号文件
+    signal_files = sorted(SIGNALS_DIR.glob(f"{trade_date}*.json"))
+    if not signal_files:
+        return ""
+
+    total_signals = 0
+    for f in signal_files:
+        try:
+            with open(f) as fh:
+                d = json.load(fh)
+            stocks = d.get("stocks", []) if isinstance(d, dict) else (d if isinstance(d, list) else [])
+            total_signals += len(stocks)
+        except Exception:
+            pass
+
+    # 检查报告文件
+    report_md = REPORTS_DIR / f"{trade_date}.md"
+    report_json = REPORTS_DIR / f"{trade_date}.json"
+    has_report = report_md.exists() or report_json.exists()
+
+    section = f"""## 扫描信号与报告
+
+| 指标 | 值 |
+|------|:---:|
+| 全天扫描次数 | {len(signal_files)} 次 |
+| 累计信号量 | {total_signals} 条 |
+| 复盘报告 | {'✅ 已生成' if has_report else '待生成'} |
+"""
+    return section
 
 
 def _compile_weight_analysis(trade_date: str) -> str:
