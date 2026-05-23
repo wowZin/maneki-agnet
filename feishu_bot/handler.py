@@ -629,11 +629,11 @@ def _query_wiki(text: str) -> str | None:
         if not words:
             return None
 
-        # 搜索 concepts/ + entities/ + queries/
+        # 搜索 concepts/ + plays/ 下的所有玩法数据
         grep_dirs = [
             str(WIKI_PATH / "concepts"),
-            str(WIKI_PATH / "entities"),
             str(WIKI_PATH / "queries"),
+            str(WIKI_PATH / "plays"),
         ]
         matched_files = set()
         for w in words:

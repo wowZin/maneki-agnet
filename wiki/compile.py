@@ -21,7 +21,7 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 ANALYSIS_DIR = PROJECT_DIR / "plays" / "limit_up" / "data" / "analysis"
 WIKI_DIR = PROJECT_DIR / "wiki"
-ENTITIES_DIR = WIKI_DIR / "plays" / "limit_up" / "entities"
+ENTITIES_DIR = WIKI_DIR / "plays" / "limit-up" / "entities"
 INDEX_FILE = WIKI_DIR / "index.md"
 LOG_FILE = WIKI_DIR / "log.md"
 
