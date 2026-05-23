@@ -112,7 +112,17 @@ def score_fundflow(code):
         daily_basic_data = list_to_dict(items, fields)
     except:
         pass
-    
+
+    # 1.6 每日行情数据（获取high/low/pre_close, daily_basic不含这些字段）
+    daily_data = []
+    try:
+        resp = call_tushare("daily", token, {"ts_code": code}, "trade_date,ts_code,open,high,low,close,pre_close,pct_chg,vol,amount")
+        items = resp.get("data", {}).get("items", [])
+        fields = resp.get("data", {}).get("fields", [])
+        daily_data = list_to_dict(items, fields)
+    except:
+        pass
+
     # ===== 2. 一票否决检查 =====
     yiziban_exempt = False  # V2.0一字板豁免标志
     # 2.1 主力持续流出：近3日累计净流出 > 0.5%流通市值
@@ -259,11 +269,11 @@ def score_fundflow(code):
     # 组合A：14:30后成交量占全天>25% AND 收盘价<分时均价线
     # 组合B：14:00后成交量占全天>45% AND 当日收跌 AND 收盘价<分时均价线
     # 分时均价线代理（无分钟数据时）：收盘价 < (最高价+最低价)/2
-    if daily_basic_data:
-        close = safe_float(daily_basic_data[0].get("close", 0))
-        high = safe_float(daily_basic_data[0].get("high", 0))
-        low = safe_float(daily_basic_data[0].get("low", 0))
-        pct_chg = safe_float(daily_basic_data[0].get("pct_chg", 0))
+    if daily_data:
+        close = safe_float(daily_data[0].get("close", 0))
+        high = safe_float(daily_data[0].get("high", 0))
+        low = safe_float(daily_data[0].get("low", 0))
+        pct_chg = safe_float(daily_data[0].get("pct_chg", 0))
         # 分时均价线代理
         avg_price_proxy = (high + low) / 2 if high > 0 and low > 0 else 0
         below_avg = close < avg_price_proxy if avg_price_proxy > 0 else False
@@ -529,17 +539,18 @@ def score_fundflow(code):
     dim3_score = 0
     dim3_reason = []
     
-    if moneyflow_data and daily_basic_data:
+    if moneyflow_data and daily_data:
         latest = moneyflow_data[0]
+        latest_daily = daily_data[0]
         net_mf = safe_float(latest.get("net_mf_amount", 0))
-        turnover_rate = safe_float(daily_basic_data[0].get("turnover_rate", 0))
+        turnover_rate = safe_float(daily_basic_data[0].get("turnover_rate", 0)) if daily_basic_data else 0
         
         # V2.3: 持续净流入（日频代理）——最低价≥昨收×0.99 包容换手板宽幅震荡
         if net_mf > 0:
-            close = safe_float(daily_basic_data[0].get("close", 0))
-            low = safe_float(daily_basic_data[0].get("low", 0))
-            high = safe_float(daily_basic_data[0].get("high", 0))
-            pre_close = safe_float(daily_basic_data[0].get("pre_close", 0))
+            close = safe_float(latest_daily.get("close", 0))
+            low = safe_float(latest_daily.get("low", 0))
+            high = safe_float(latest_daily.get("high", 0))
+            pre_close = safe_float(latest_daily.get("pre_close", 0))
             
             # 持续净流入条件：主力净流入>0 AND 最低价≥昨收×0.99 AND 收盘/最高>0.95
             low_ok = low >= pre_close * 0.99 if pre_close > 0 else True
@@ -856,7 +867,11 @@ def _get_realtime_fund_cache():
     if _REALTIME_FUND_CACHE and _REALTIME_FUND_TS == today:
         return _REALTIME_FUND_CACHE
     
-    from scripts.proxy_utils import get_proxies_dict
+    try:
+        from scripts.proxy_utils import get_proxies_dict
+        proxies = get_proxies_dict()
+    except Exception:
+        proxies = None
     cache = {}
     for page in range(1, 6):  # 翻5页×100=500只
         try:
