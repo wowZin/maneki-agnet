@@ -761,23 +761,15 @@ async def handle_message_event(event: dict):
         )
         return
 
-    # ── 1.5 知识库查询 — try wiki first（任何非股票问题都试试）──
-    wiki_answer = _query_wiki(text)
-    if wiki_answer:
-        await FEISHU_CLIENT.reply_markdown(message_id, wiki_answer)
-        return
-
     codes = parse_stock_codes(text)
     if not codes:
         last = _get_last_analysis(chat_id)
         dim, _ = detect_follow_up(text, last)
         if dim and last:
             if dim == "rating":
-                # 评级追问
                 explanation = get_rating_explanation(last["result"])
                 await FEISHU_CLIENT.reply_markdown(message_id, explanation)
             elif dim == "all":
-                # 全部维度详细解读
                 lines = []
                 for d in ["fundamental", "technical", "fundflow", "sentiment", "shortterm"]:
                     score = last["result"]["scores"].get(d, 0)
@@ -791,7 +783,13 @@ async def handle_message_event(event: dict):
                 await FEISHU_CLIENT.reply_markdown(message_id, explanation)
             return
 
-        # 既不是股票也不是追问 → 友好提示
+        # ── 兜底：尝试 wiki 知识库查询 ──
+        wiki_answer = _query_wiki(text)
+        if wiki_answer:
+            await FEISHU_CLIENT.reply_markdown(message_id, wiki_answer)
+            return
+
+        # 既不是股票也不是追问也不是知识 → 友好提示
         await FEISHU_CLIENT.reply_markdown(
             message_id,
             "📌 我没有识别到股票代码或名称。\n\n"
