@@ -106,7 +106,7 @@ def score_fundflow(code):
     # 1.5 每日基本面数据（获取流通市值）
     daily_basic_data = []
     try:
-        resp = call_tushare("daily_basic", token, {"ts_code": code}, "trade_date,ts_code,close,pct_change,turnover_rate,turnover_rate_f,volume_ratio,total_mv,circ_mv,amount")
+        resp = call_tushare("daily_basic", token, {"ts_code": code}, "trade_date,ts_code,close,pct_chg,turnover_rate,turnover_rate_f,volume_ratio,total_mv,circ_mv,amount")
         items = resp.get("data", {}).get("items", [])
         fields = resp.get("data", {}).get("fields", [])
         daily_basic_data = list_to_dict(items, fields)
@@ -128,7 +128,7 @@ def score_fundflow(code):
     # V2.0一字板豁免：一字板(pct_chg≈10%且开板次数=0)无大单成交属正常，主力已高度控盘
     is_yiziban = False  # 一字板标志
     if daily_basic_data:
-        pct_chg = safe_float(daily_basic_data[0].get("pct_change", 0))
+        pct_chg = safe_float(daily_basic_data[0].get("pct_chg", 0))
         # 用涨跌停数据判断一字板（开板次数=0且涨停）
         try:
             resp_ll = call_tushare("limit_list_d", token, {"ts_code": code, "trade_date": today}, "trade_date,ts_code,close,pct_chg,open_times,limit")
@@ -233,7 +233,7 @@ def score_fundflow(code):
     if moneyflow_data and daily_basic_data:
     # Tushare T+1 散户接盘检查
         latest_basic = daily_basic_data[0]
-        pct_change = safe_float(latest_basic.get("pct_change", 0))
+        pct_change = safe_float(latest_basic.get("pct_chg", 0))
         if pct_change > 3:
             latest_mf = moneyflow_data[0]
             net_mf = safe_float(latest_mf.get("net_mf_amount", 0))
@@ -263,7 +263,7 @@ def score_fundflow(code):
         close = safe_float(daily_basic_data[0].get("close", 0))
         high = safe_float(daily_basic_data[0].get("high", 0))
         low = safe_float(daily_basic_data[0].get("low", 0))
-        pct_chg = safe_float(daily_basic_data[0].get("pct_change", 0))
+        pct_chg = safe_float(daily_basic_data[0].get("pct_chg", 0))
         # 分时均价线代理
         avg_price_proxy = (high + low) / 2 if high > 0 and low > 0 else 0
         below_avg = close < avg_price_proxy if avg_price_proxy > 0 else False
@@ -381,7 +381,7 @@ def score_fundflow(code):
     retail_retail_exempt = False
     # 取换手率（V2.3散户接盘豁免判定用）
     retail_turnover_rate = t_turnover_rate if 't_turnover_rate' in dir() else 0
-    pct_change_for_retail = safe_float(daily_basic_data[0].get("pct_change", 0)) if daily_basic_data else 0
+    pct_change_for_retail = safe_float(daily_basic_data[0].get("pct_chg", 0)) if daily_basic_data else 0
     
     if moneyflow_data:
         latest = moneyflow_data[0]
@@ -474,7 +474,7 @@ def score_fundflow(code):
                 # 检查T日是否正在拉升（涨幅>7%），若是则豁免
                 t_day_pct = 0
                 if daily_basic_data:
-                    t_day_pct = safe_float(daily_basic_data[0].get("pct_change", 0))
+                    t_day_pct = safe_float(daily_basic_data[0].get("pct_chg", 0))
                 if t_day_pct > 7:
                     pass  # V2.3首板豁免：不扣分
                 else:
@@ -570,7 +570,7 @@ def score_fundflow(code):
             dim3_reason.append(f"净流出{abs(net_mf)/10000:.2f}亿")
         
         # V2.3 负向过滤（满足任一即扣12分）
-        pct_chg = safe_float(daily_basic_data[0].get("pct_change", 0))
+        pct_chg = safe_float(daily_basic_data[0].get("pct_chg", 0))
         is_zt = (pct_chg >= 9.5)
         is_negative_triggered = False
         
