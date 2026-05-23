@@ -21,6 +21,7 @@ PROJECT_DIR = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 
 import tushare as ts
+import requests
 from dotenv import load_dotenv
 import os
 
