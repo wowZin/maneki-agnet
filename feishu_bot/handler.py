@@ -619,7 +619,7 @@ async def handle_message_event(event: dict):
 
     # ── 1. 检测是否为非股票问题 ──
     if is_non_stock_message(text):
-        await FEISHU_CLIENT.reply_text(
+        await FEISHU_CLIENT.reply_markdown(
             message_id,
             "🤖 你好！我是 **Maneki 股票分析助手**，专注于A股个股分析。\n\n"
             "**我可以帮你：**\n"
@@ -644,7 +644,7 @@ async def handle_message_event(event: dict):
             if dim == "rating":
                 # 评级追问
                 explanation = get_rating_explanation(last["result"])
-                await FEISHU_CLIENT.reply_text(message_id, explanation)
+                await FEISHU_CLIENT.reply_markdown(message_id, explanation)
             elif dim == "all":
                 # 全部维度详细解读
                 lines = []
@@ -652,16 +652,16 @@ async def handle_message_event(event: dict):
                     score = last["result"]["scores"].get(d, 0)
                     reason = last["result"]["reasons"].get(d, "")
                     lines.append(get_dim_explanation(d, score, reason))
-                await FEISHU_CLIENT.reply_text(message_id, "\n\n".join(lines))
+                await FEISHU_CLIENT.reply_markdown(message_id, "\n\n".join(lines))
             else:
                 score = last["result"]["scores"].get(dim, 0)
                 reason = last["result"]["reasons"].get(dim, "")
                 explanation = get_dim_explanation(dim, score, reason)
-                await FEISHU_CLIENT.reply_text(message_id, explanation)
+                await FEISHU_CLIENT.reply_markdown(message_id, explanation)
             return
 
         # 既不是股票也不是追问 → 友好提示
-        await FEISHU_CLIENT.reply_text(
+        await FEISHU_CLIENT.reply_markdown(
             message_id,
             "📌 我没有识别到股票代码或名称。\n\n"
             "请这样使用：\n"

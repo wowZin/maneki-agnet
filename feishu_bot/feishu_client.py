@@ -1,6 +1,7 @@
 """飞书 API 客户端 — token管理 + 消息发送"""
 
 import json
+import re
 import time
 from pathlib import Path
 
@@ -76,6 +77,31 @@ class FeishuClient:
     async def reply_text(self, message_id: str, text: str):
         return await self.reply_message(message_id, "text", json.dumps({"text": text}))
 
+    async def reply_markdown(self, message_id: str, md: str):
+        """以飞书post富文本格式发送markdown内容"""
+        content = _md_to_post_content(md)
+        return await self.reply_message(message_id, "post", json.dumps(content))
+
 
 # 全局单例（使用机器人回调凭证）
 FEISHU_CLIENT = FeishuClient()
+
+
+def _md_to_post_content(md: str) -> dict:
+    """将简单markdown转为飞书post消息格式（支持 **bold** 和 \n 分段）"""
+    import re
+    paragraphs = []
+    for line in md.split("\n"):
+        if not line.strip():
+            continue
+        elements = []
+        # 解析 **bold**
+        parts = re.split(r"(\*\*[^*]+\*\*)", line)
+        for part in parts:
+            if part.startswith("**") and part.endswith("**"):
+                elements.append({"tag": "text", "text": part[2:-2], "style": ["bold"]})
+            elif part:
+                elements.append({"tag": "text", "text": part})
+        if elements:
+            paragraphs.append(elements)
+    return {"zh_cn": {"content": paragraphs}}
