@@ -661,9 +661,13 @@ def _query_wiki(text: str) -> str | None:
                     score += 1
             file_scores[fp] = score
 
-        top_files = sorted(file_scores.keys(), key=lambda x: file_scores[x], reverse=True)[:3]
+        top_files = sorted(
+            file_scores.keys(),
+            key=lambda x: (file_scores[x], 1 if "/entities/" in x else 0, x),
+            reverse=True
+        )[:1]
 
-        # 读取匹配文件内容
+        # 读取最佳匹配文件的完整内容
         contexts = []
         for fp in top_files:
             fpath = Path(fp)
@@ -671,8 +675,7 @@ def _query_wiki(text: str) -> str | None:
                 content = fpath.read_text(encoding="utf-8")
                 parts = content.split("---", 2)
                 body = parts[2].strip() if len(parts) >= 3 else content
-                lines = body.split("\n")
-                contexts.append(f"--- {fpath.name} ---\n" + "\n".join(lines[:80]))
+                contexts.append(body)
 
         wiki_context = "\n\n".join(contexts)
 
