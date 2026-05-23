@@ -1,98 +1,104 @@
 # 架构设计
 
-## 涨停预测 Agent Room 架构
+## 项目定位 — Agent Room
 
-### 设计原则
+本项目是一个 **Agent Room**（玩法集合），每个玩法是一个独立的自包含模块，共享同一套基础设施。
 
-1. **分而治之**: 每个子 agent 只负责一个分析维度，独立评估
-2. **加权民主**: 通过权重投票机制聚合结论，避免单一视角偏差
-3. **闭环复盘**: 每日收盘后自动复盘，根据实际表现调整权重
-4. **最小特权**: 子 agent 只能分析，不能决策；只有 team-leader 输出信号
-
-### 数据流
-
-```text
-[涨速API] --Top100--> zt-trigger
-                        |
-                        v
-                   zt-team-leader (dispatch)
-                   /      |      \\      \\      \\
-                  v       v       v      v      v
-       zt-technician  zt-fundamental  zt-fund-flow  zt-sentiment  zt-shortterm
-          (score)        (score)        (score)      (score)       (score)
-                  \\       |       /      /        /
-                   v      v      v     v        v
-                   zt-team-leader (aggregate)
-                        |  ╱ 加权求和
-                        |  ╲  Top3择优（V2.4并行）
-                        |
-              [置信度 > 35%] --> 飞书Webhook
-              [16:00 复盘]   --> 飞书Webhook
+```
+maneki-agent/
+├── plays/                    ← 各玩法（垂直隔离）
+│   ├── limit_up/             ← 涨停预测玩法
+│   │   ├── pipeline.py       ← 主流程：扫描→评分→推送
+│   │   ├── agents/           ← 评分维度（每个维度独立文件）
+│   │   ├── review.py         ← 收盘复盘
+│   │   ├── optimize.py       ← 权重优化器
+│   │   ├── health_patrol.py  ← 健康巡检
+│   │   ├── verify.py         ← 评分验证
+│   │   └── data/             ← 该玩法全部数据
+│   └── xxx/                  ← 其他玩法（未来）
+├── feishu_bot/               ← 统一飞书入口（路由到各play）
+├── wiki/                     ← 共享知识库
+├── scripts/proxy_utils.py    ← 共享基础设施（代理池）
+├── docs/                     ← 文档
+└── CLAUDE.md                 ← 项目约束
 ```
 
-### 控制面 vs 运行时
+## 设计原则
 
-控制面 (本仓库):
+1. **玩法垂直隔离** — 每个 `plays/xxx/` 自包含 pipeline、评分、数据、配置
+2. **基础设施共享** — 飞书Bot、代理池、知识库跨玩法复用
+3. **统一入口路由** — 飞书Bot 根据消息内容自动路由到对应玩法
+4. **文档先行** — 修改前先写文档，审核后再改代码
 
-```text
-./
-  agents/    -- agent 定义和文档
-  docs/      -- 架构和流程文档
-  shared/    -- 共享配置
-  templates/ -- 模板
-  skills/    -- 技能定义
+## 涨停预测 (plays/limit_up) 数据流
+
+```
+[东财API(代理)] → scan_surge() → 候选池(≈400只)
+                       ↓
+             五维度并行评分（ThreadPoolExecutor）
+          ┌──────┬──────┬──────┬──────┬──────┐
+     基本面  技术面  资金面  情绪面  短线博弈
+          └──────┴──────┴──────┴──────┴──────┘
+                       ↓
+              加权Top3择优 → 总分排序
+                       ↓
+              阈值≥35 → Top3 推送飞书
 ```
 
-运行时数据:
+## 各玩法 vs 共享设施
 
-```text
-/srv/<agent-name>/data
-  .env          -- 环境变量
-  memory/       -- 持久记忆
-  sessions/     -- 会话记录
-  logs/         -- 日志
-  predictions/  -- 预测存档
-  reviews/      -- 复盘存档
+| 层 | 目录 | 职责 |
+|----|------|------|
+| 玩法 | `plays/xxx/` | 评分逻辑、pipeline、专属数据 |
+| 玩法 | `plays/xxx/agents/` | 各评分维度（独立文件，统一签名 `score_xxx(code)→(int,str)`） |
+| 路由 | `feishu_bot/` | 统一飞书入口，根据消息路由到对应玩法 |
+| 共享 | `scripts/proxy_utils.py` | 代理池管理（zdtps动态代理） |
+| 共享 | `wiki/` | 跨玩法知识库（SCHEMA+concepts+plays/xxx/entities） |
+
+## 玩法内文件约定
+
+每个 `plays/xxx/` 目录：
+
+```
+plays/xxx/
+├── pipeline.py       ← 主流程（扫描→评分→推送）
+├── agents/           ← 评分维度（统一签名）
+│   ├── __init__.py
+│   ├── fundamental_agent.py
+│   ├── technical_agent.py
+│   ├── fundflow_agent.py
+│   ├── sentiment_agent.py
+│   └── shortterm_agent.py
+├── review.py         ← 复盘逻辑
+├── optimize.py       ← 优化器（可选）
+├── health_patrol.py  ← 巡检（可选）
+├── verify.py         ← 验证脚本
+├── data/             ← 全部数据
+│   ├── analysis/     ← 评分结果
+│   ├── signals/      ← 原始信号
+│   ├── pushed/       ← 推送记录
+│   ├── weights/      ← 优化结果
+│   ├── reports/      ← 复盘报告
+│   └── logs/         ← 运行日志
+└── __init__.py
 ```
 
-### 容器拓扑
+## 定时任务调度
 
-每个 agent 独立容器运行:
+| 任务 | 时间 | 调用 |
+|------|------|------|
+| 盘中扫描 | 周一至五 9:35~14:55 每5分钟 | `plays/limit_up/pipeline.py` |
+| 收盘复盘 | 周一至五 18:00 | `plays/limit_up/review.py` |
+| 权重优化 | 周一至五 19:00 | `plays/limit_up/optimize.py` |
+| Wiki compile | 周一至五 20:00 | `wiki/compile.py` |
+| 健康巡检 | 周一至五 10~14点整点 | `plays/limit_up/health_patrol.py` |
 
-```text
-| zt-trigger:       8642/9119
-| zt-technician:    8643/9120
-| zt-fundamental:   8644/9121
-| zt-fund-flow:     8645/9122
-| zt-sentiment:     8646/9123
-| zt-shortterm:     8647/9124
-| zt-team-leader:   8650/9130
+## 飞书Bot路由
+
 ```
-
-所有端口仅绑定 localhost，通过 Docker 内部网络互通。
-
-### V2.4 增量改进
-
-| 改进项 | 说明 | 涉及组件 |
-|--------|------|---------|
-| Top-N 择优排序 | 加权求和之外新增 Top3 均值排序，补捉极端信号 | 聚合层 |
-| 攻击独特性因子 | 第5维度新增子因子(20%)，含涨停基因+高开率+弱转强 | score_shortterm |
-| 弱转强分支 | 第一层粗筛新增弱转强候选 | zt-trigger |
-| 情绪熔断+冰点 | 否决6/7，炸板率>40%+跌停>15家熔断，冰点1/4仓位试探 | zt-sentiment |
-
-### 调度
-
-| 调度项 | Cron 表达式 | 说明 |
-|---|---|---|
-| 盘中扫描 | `*/10 9-14 * * 1-5` | 工作日9:00-14:50每10分钟 |
-| 收盘复盘 | `0 16 * * 1-5` | 工作日16:00 |
-
-注意: 14:50 是最后一次扫描触发(14:50触发，15:00前完成)，确保覆盖到尾盘异动。
-
-### 超时与容错
-
-- 子 agent 单轮分析超时: 5 分钟
-- 整轮聚合超时: 8 分钟
-- 飞书通知重试: 3 次，间隔 5s
-- 超时未返回的子 agent 视为弃权，权重归零
-- 所有预测结果持久化到 `/srv/zt-team-leader/data/predictions/`
+用户发消息 → feishu_bot/handler.py
+   ├─ 含股票代码/名称 → plays/limit_up/pipeline.py （个股分析）
+   ├─ 追问指标 → get_dim_explanation() / get_rating_explanation()
+   ├─ 知识问题 → wiki/ 查询（grep + DeepSeek 合成回答）
+   └─ 闲聊 → 能力介绍
+```
