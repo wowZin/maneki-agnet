@@ -19,7 +19,7 @@ import argparse
 import requests
 
 # 项目根目录
-PROJECT_DIR = Path(__file__).parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 
 # 从.env加载配置
@@ -442,12 +442,12 @@ def filter_candidates(candidates):
 # ===== 2. 基本面评分 (V1.0 五维度量化) =====
 # Lazy import to avoid circular dependency
 def score_fundamental(code):
-    from scripts.agents.fundamental_agent import score_fundamental as _score_fundamental
+    from plays.limit_up.agents.fundamental_agent import score_fundamental as _score_fundamental
     return _score_fundamental(code)
 
 # ===== 3. 技术面评分 V1.0 (五维度量化) =====
 def score_technical(code):
-    from scripts.agents.technical_agent import score_technical as _score_technical
+    from plays.limit_up.agents.technical_agent import score_technical as _score_technical
     return _score_technical(code)
 
 
@@ -457,7 +457,7 @@ _FUND_FLOW_CACHE = None
 _FUND_FLOW_DATE = None
 
 def score_fundflow(code):
-    from scripts.agents.fundflow_agent import score_fundflow as _score_fundflow
+    from plays.limit_up.agents.fundflow_agent import score_fundflow as _score_fundflow
     return _score_fundflow(code)
 
 # V2.4: 实时涨幅缓存（CDP/requests+代理获取，避免盘中Tushare无数据）
@@ -624,7 +624,7 @@ def _get_realtime_fund_cache():
 
 
 def score_sentiment(code):
-    from scripts.agents.sentiment_agent import score_sentiment as _score_sentiment
+    from plays.limit_up.agents.sentiment_agent import score_sentiment as _score_sentiment
     return _score_sentiment(code)
 
 
@@ -786,7 +786,7 @@ def main():
         
         print("  五维度并行评分...", flush=True)
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        from score_shortterm import score_shortterm
+        from plays.limit_up.agents.shortterm_agent import score_shortterm
         scoring_funcs = {
             "fundamental": score_fundamental,
             "technical": score_technical,

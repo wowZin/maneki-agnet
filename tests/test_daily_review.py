@@ -13,7 +13,7 @@ from unittest.mock import patch
 PROJECT_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 
-from scripts.zt_daily_review import (
+from plays.limit_up.review import (
     build_signal_pct_map,
     calculate_win_rate,
     analyze_dimension_performance,

@@ -25,7 +25,7 @@ class TestFundamentalScoreV1(unittest.TestCase):
 
     def setUp(self):
         """每个测试前清空Tushare缓存，避免缓存污染"""
-        from scripts.zt_pipeline import clear_tushare_cache
+        from plays.limit_up.pipeline import clear_tushare_cache
         clear_tushare_cache()
 
     def _mock_requests_post(self, responses_map):
@@ -42,7 +42,7 @@ class TestFundamentalScoreV1(unittest.TestCase):
 
     def test_veto_goodwill_ratio(self):
         """否决：商誉占比>30%"""
-        from scripts.zt_pipeline import score_fundamental
+        from plays.limit_up.pipeline import score_fundamental
         responses = {
             "daily_basic": _build_tushare_response([[15.0, 2.5, 500000, 300000]], ["pe", "pb", "total_mv", "circ_mv"]),
             "fina_indicator": _build_tushare_response(
@@ -67,7 +67,7 @@ class TestFundamentalScoreV1(unittest.TestCase):
 
     def test_veto_debt_and_ocf_negative(self):
         """否决：负债率>70%且经营现金流为负"""
-        from scripts.zt_pipeline import score_fundamental
+        from plays.limit_up.pipeline import score_fundamental
         responses = {
             "daily_basic": _build_tushare_response([[15.0, 2.5, 500000, 300000]], ["pe", "pb", "total_mv", "circ_mv"]),
             "fina_indicator": _build_tushare_response(
@@ -93,7 +93,7 @@ class TestFundamentalScoreV1(unittest.TestCase):
 
     def test_veto_non_oper_income_ratio(self):
         """否决：非经常性损益占比>20%"""
-        from scripts.zt_pipeline import score_fundamental
+        from plays.limit_up.pipeline import score_fundamental
         responses = {
             "daily_basic": _build_tushare_response([[15.0, 2.5, 500000, 300000]], ["pe", "pb", "total_mv", "circ_mv"]),
             "fina_indicator": _build_tushare_response(
@@ -118,7 +118,7 @@ class TestFundamentalScoreV1(unittest.TestCase):
 
     def test_veto_main_biz_ratio(self):
         """否决：主业营收占比<50%"""
-        from scripts.zt_pipeline import score_fundamental
+        from plays.limit_up.pipeline import score_fundamental
         responses = {
             "daily_basic": _build_tushare_response([[15.0, 2.5, 500000, 300000]], ["pe", "pb", "total_mv", "circ_mv"]),
             "fina_indicator": _build_tushare_response(
@@ -145,7 +145,7 @@ class TestFundamentalScoreV1(unittest.TestCase):
 
     def test_high_score_profit_event_resonance(self):
         """高分：业绩+事件共振（条件A）"""
-        from scripts.zt_pipeline import score_fundamental
+        from plays.limit_up.pipeline import score_fundamental
         responses = {
             "daily_basic": _build_tushare_response([[15.0, 1.5, 500000, 300000]], ["pe", "pb", "total_mv", "circ_mv"]),
             "fina_indicator": _build_tushare_response(
@@ -178,7 +178,7 @@ class TestFundamentalScoreV1(unittest.TestCase):
 
     def test_mid_score_no_resonance(self):
         """中分：无共振，正常评分"""
-        from scripts.zt_pipeline import score_fundamental
+        from plays.limit_up.pipeline import score_fundamental
         responses = {
             "daily_basic": _build_tushare_response([[25.0, 2.5, 500000, 300000]], ["pe", "pb", "total_mv", "circ_mv"]),
             "fina_indicator": _build_tushare_response(
@@ -212,7 +212,7 @@ class TestFundamentalScoreV1(unittest.TestCase):
 
     def test_low_score_weak_profit(self):
         """低分：业绩差"""
-        from scripts.zt_pipeline import score_fundamental
+        from plays.limit_up.pipeline import score_fundamental
         responses = {
             "daily_basic": _build_tushare_response([[60.0, 5.0, 500000, 300000]], ["pe", "pb", "total_mv", "circ_mv"]),
             "fina_indicator": _build_tushare_response(
@@ -240,7 +240,7 @@ class TestFundamentalScoreV1(unittest.TestCase):
 
     def test_no_data(self):
         """无数据：应返回合理默认值"""
-        from scripts.zt_pipeline import score_fundamental
+        from plays.limit_up.pipeline import score_fundamental
         responses = {
             "daily_basic": _build_tushare_response([]),
             "fina_indicator": _build_tushare_response([]),

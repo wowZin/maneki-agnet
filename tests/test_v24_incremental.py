@@ -12,9 +12,9 @@ load_dotenv(PROJECT_DIR / ".env")
 import tushare as ts
 ts.set_token(os.getenv("TUSHARE_TOKEN", ""))
 pro = ts.pro_api()
-
-from zt_pipeline import score_sentiment
-from score_shortterm import score_shortterm, score_aggression
+sys.path.insert(0, str(PROJECT_DIR / "plays" / "limit-up"))
+from plays.limit_up.pipeline import score_sentiment
+from plays.limit_up.agents.shortterm_agent import score_shortterm, score_aggression
 
 
 def test_v24_aggression_factor():

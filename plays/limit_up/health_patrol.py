@@ -4,7 +4,7 @@ import json, sys, os, subprocess, time
 from pathlib import Path
 from datetime import datetime
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 ANALYSIS_DIR = PROJECT_DIR / "data" / "analysis"
 SCRIPTS_DIR = PROJECT_DIR / "scripts"
 

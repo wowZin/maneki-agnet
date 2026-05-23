@@ -117,9 +117,9 @@ def dedup(records: list[dict]) -> list[dict]:
 
 
 def score_stock(code: str) -> dict:
-    """跑五维评分，返回 {dim: score} 和 {dim: reason}（2C4G：串行跑各维度，避免嵌套线程）"""
-    from zt_pipeline import score_fundamental, score_technical, score_fundflow, score_sentiment
-    from score_shortterm import score_shortterm
+    sys.path.insert(0, str(PROJECT_DIR / "plays" / "limit-up"))
+    from plays.limit_up.pipeline import score_fundamental, score_technical, score_fundflow, score_sentiment
+    from plays.limit_up.agents.shortterm_agent import score_shortterm
 
     scores, reasons = {}, {}
     funcs = {

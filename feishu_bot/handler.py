@@ -281,14 +281,14 @@ def get_rating_explanation(result: dict) -> str:
 
 
 def _score_one_stock(code: str) -> dict:
-    from zt_pipeline import (
+    from plays.limit_up.pipeline import (
         score_fundamental,
         score_technical,
         score_fundflow,
         score_sentiment,
         AGENT_WEIGHTS,
     )
-    from score_shortterm import score_shortterm
+    from plays.limit_up.agents.shortterm_agent import score_shortterm
 
     scores: dict[str, float] = {}
     reasons: dict[str, str] = {}
@@ -328,7 +328,7 @@ def _score_one_stock(code: str) -> dict:
 
 
 def _get_realtime_quote(code: str) -> dict:
-    from scripts.zt_pipeline import is_trading_time
+    from plays.limit_up.pipeline import is_trading_time
 
     raw = code.split(".")[0]
 

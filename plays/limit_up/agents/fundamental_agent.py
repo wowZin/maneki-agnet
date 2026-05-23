@@ -2,11 +2,11 @@
 """基本面分析Agent - score_fundamental extracted from zt_pipeline.py"""
 import sys
 from pathlib import Path
-PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 sys.path.insert(0, str(PROJECT_DIR / "scripts"))
 
-from zt_pipeline import CONFIG, call_tushare
+from plays.limit_up.pipeline import CONFIG, call_tushare
 
 # ===== 全局工具函数 =====
 def safe_float(val):

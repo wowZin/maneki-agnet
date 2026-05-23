@@ -1,9 +1,9 @@
 import sys
 from pathlib import Path
-PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 sys.path.insert(0, str(PROJECT_DIR / "scripts"))
-from zt_pipeline import CONFIG, call_tushare, safe_float_none, safe_int_none, list_to_dict, _get_popularity_rank, _batch_fetch_realtime_pct
+from plays.limit_up.pipeline import CONFIG, call_tushare, safe_float_none, safe_int_none, list_to_dict, _get_popularity_rank, _batch_fetch_realtime_pct
 
 
 def score_sentiment(code):

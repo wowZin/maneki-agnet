@@ -17,7 +17,7 @@ import sys
 import time
 from pathlib import Path
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 sys.path.insert(0, str(PROJECT_DIR / "scripts"))
 
@@ -34,9 +34,9 @@ DIMS = ["fundamental", "technical", "fundflow", "sentiment", "shortterm"]
 def run_all_scores():
     """跑所有股票的5维度评分"""
     # 动态导入（确保用的是当前代码）
-    sys.path.insert(0, str(PROJECT_DIR / "scripts"))
-    from zt_pipeline import score_fundamental, score_technical, score_fundflow, score_sentiment
-    from score_shortterm import score_shortterm
+    sys.path.insert(0, str(PROJECT_DIR / "plays" / "limit-up"))
+    from plays.limit_up.pipeline import score_fundamental, score_technical, score_fundflow, score_sentiment
+    from plays.limit_up.agents.shortterm_agent import score_shortterm
 
     funcs = {
         "fundamental": score_fundamental,

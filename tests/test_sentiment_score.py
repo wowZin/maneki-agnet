@@ -29,7 +29,7 @@ class TestSentimentScoreV1(unittest.TestCase):
 
     def setUp(self):
         """每个测试前清空Tushare缓存，避免缓存污染"""
-        from scripts.zt_pipeline import clear_tushare_cache
+        from plays.limit_up.pipeline import clear_tushare_cache
         clear_tushare_cache()
 
     def _mock_requests_post(self, responses_map):
@@ -112,7 +112,7 @@ class TestSentimentScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_veto_market_downturn(self, mock_post):
         """一票否决：市场退潮（涨停<15家）"""
-        from scripts.zt_pipeline import score_sentiment
+        from plays.limit_up.pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
@@ -147,7 +147,7 @@ class TestSentimentScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_veto_theme_collapse(self, mock_post):
         """一票否决：主线崩塌（概念涨停=0）+ 纯跟风（=1）"""
-        from scripts.zt_pipeline import score_sentiment
+        from plays.limit_up.pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
@@ -180,7 +180,7 @@ class TestSentimentScoreV1(unittest.TestCase):
         self.assertIn("主线崩塌", reason)
 
         # 场景2: 概念涨停=1 → 纯跟风（非主线崩塌）
-        from scripts.zt_pipeline import clear_tushare_cache
+        from plays.limit_up.pipeline import clear_tushare_cache
         clear_tushare_cache()
         responses_1 = {
             "concept_detail": _build_tushare_response(
@@ -210,7 +210,7 @@ class TestSentimentScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_veto_hot_money_exit(self, mock_post):
         """一票否决：游资出逃（龙虎榜净卖出>3000万）"""
-        from scripts.zt_pipeline import score_sentiment
+        from plays.limit_up.pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
@@ -249,7 +249,7 @@ class TestSentimentScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_high_market_sentiment(self, mock_post):
         """大盘情绪高涨：涨停≥35、跌停<5、连板≥4"""
-        from scripts.zt_pipeline import score_sentiment
+        from plays.limit_up.pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
@@ -293,7 +293,7 @@ class TestSentimentScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_theme_hot_keywords(self, mock_post):
         """主线题材：热门关键词匹配"""
-        from scripts.zt_pipeline import score_sentiment
+        from plays.limit_up.pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
@@ -325,7 +325,7 @@ class TestSentimentScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_turnover_active(self, mock_post):
         """个股人气：换手率10%-25%活跃区间"""
-        from scripts.zt_pipeline import score_sentiment
+        from plays.limit_up.pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
@@ -362,7 +362,7 @@ class TestSentimentScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_turnover_overheat(self, mock_post):
         """个股人气：换手率>25%过热扣分"""
-        from scripts.zt_pipeline import score_sentiment
+        from plays.limit_up.pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
@@ -395,7 +395,7 @@ class TestSentimentScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_dragon_tiger_net_buy(self, mock_post):
         """个股人气：龙虎榜净买入加分"""
-        from scripts.zt_pipeline import score_sentiment
+        from plays.limit_up.pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
@@ -428,7 +428,7 @@ class TestSentimentScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_auction_strong_open(self, mock_post):
         """集合竞价：高开5-8% + 高关注度(CallVolRatio量纲修正V1.2) + 高量比"""
-        from scripts.zt_pipeline import score_sentiment
+        from plays.limit_up.pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
@@ -487,7 +487,7 @@ class TestSentimentScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_auction_weak_open(self, mock_post):
         """集合竞价：低开>3% 扣分（V1.2含市场状态乘数）"""
-        from scripts.zt_pipeline import score_sentiment
+        from plays.limit_up.pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
@@ -539,7 +539,7 @@ class TestSentimentScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_auction_no_data(self, mock_post):
         """集合竞价：无数据时不影响评分"""
-        from scripts.zt_pipeline import score_sentiment
+        from plays.limit_up.pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
@@ -577,7 +577,7 @@ class TestSentimentScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_auction_bull_market_multiplier(self, mock_post):
         """V1.2新增：牛市态下高开加分被放大×1.3"""
-        from scripts.zt_pipeline import score_sentiment
+        from plays.limit_up.pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
@@ -652,7 +652,7 @@ class TestSentimentScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_auction_bear_market_multiplier(self, mock_post):
         """V1.2新增：熊市态下高开加分缩小×0.6，低开扣分放大"""
-        from scripts.zt_pipeline import score_sentiment
+        from plays.limit_up.pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]
@@ -726,7 +726,7 @@ class TestSentimentScoreV1(unittest.TestCase):
     @patch('requests.post')
     def test_rating_levels(self, mock_post):
         """评级映射：高中低无"""
-        from scripts.zt_pipeline import score_sentiment
+        from plays.limit_up.pipeline import score_sentiment
 
         limit_fields = ["trade_date", "ts_code", "name", "close", "pct_change", "limit", "limit_times", "up_stat"]
         step_fields = ["trade_date", "ts_code", "name", "nums"]

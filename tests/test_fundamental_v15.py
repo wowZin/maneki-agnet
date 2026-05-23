@@ -4,7 +4,7 @@ from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
-sys.path.insert(0, str(PROJECT_DIR / "scripts"))
+sys.path.insert(0, str(PROJECT_DIR / "plays" / "limit-up"))
 
 from dotenv import load_dotenv
 load_dotenv(PROJECT_DIR / ".env")
@@ -13,7 +13,7 @@ import tushare as ts
 ts.set_token(os.getenv("TUSHARE_TOKEN", ""))
 pro = ts.pro_api()
 
-from zt_pipeline import score_fundamental
+from plays.limit_up.pipeline import score_fundamental
 
 
 def test_v15_veto_goodwill_exemption():
