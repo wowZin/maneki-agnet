@@ -199,6 +199,10 @@ def _get_jj_data_eastmoney(code: str) -> dict:
 
     返回: {jj_amount, jj_volume, turnover_rate_real, change_pct_real, 流通市值}
     若无实时数据返回空dict
+
+    TODO: 如果有 Tushare 竞价接口, 可以替换为 Tushare 版本, 减少对东财 API 的依赖。
+    Tushare 相关接口参考: stk_mins (分钟线) 或 stk_factor (每日因子中的竞价字段),
+    具体接口名以实际可用为准。
     """
     result = {}
     try:
