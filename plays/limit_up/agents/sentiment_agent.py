@@ -192,12 +192,12 @@ def score_sentiment(code):
                 total_com += safe_int(sz_dict.get('com_count', 0)) or 0
                 today_amount += safe_float(sz_dict.get('amount', 0)) or 0
 
-            # 用涨停跌停数近似涨跌比（涨停数/跌停数，无法获取全市场涨跌家数）
-            # 如果有daily_info数据，可更精确估算（假设涨跌比 ≈ 涨停家数占比高的市场偏暖）
+            # 用涨停跌停数近似涨跌比（早盘跌停极少时 ratio 会虚高）
+            # 修复: 跌停=0时, ratio 不应直接触发"牛市"判定
             if limit_up_cnt_est > 0 and limit_down_cnt_est > 0:
-                mkt_advance_decline_ratio = limit_up_cnt_est / limit_down_cnt_est
+                mkt_advance_decline_ratio = min(limit_up_cnt_est / limit_down_cnt_est, 2.5)  # cap 2.5
             elif limit_up_cnt_est > 0:
-                mkt_advance_decline_ratio = 3.0  # 无跌停数据时默认偏暖
+                mkt_advance_decline_ratio = 1.0  # 跌停=0时中性, 靠amount判定
 
             # 判定市场状态
             amount_ratio = today_amount / mkt_amount_20d_avg if mkt_amount_20d_avg > 0 else 1.0
@@ -283,7 +283,7 @@ def score_sentiment(code):
             "ts_code": code,
             "start_date": start_dt.strftime('%Y%m%d'),
             "end_date": end_dt.strftime('%Y%m%d')
-        }, "trade_date,close,pct_chg,vol,high,low,open")
+        }, "trade_date,close,pre_close,pct_chg,vol,high,low,open")
         daily_items = resp.get("data", {}).get("items", [])
         if daily_items and len(daily_items) >= 2:
             d_fields = resp.get("data", {}).get("fields", [])
@@ -317,12 +317,8 @@ def score_sentiment(code):
                 d_date = d.get('trade_date', '')
                 if d_date == today_str:
                     d_high = safe_float(d.get('high', 0)) or 0
-                    d_pre_close = safe_float(d.get('open', 0)) or 0  # 用收盘代理昨收
-                    # 从daily接口获取前一日收盘价
-                    # 检查high是否接近涨停（>=昨收*1.095）
-                    # 用open代理pre_close不准确，从数据中获取昨收
-                    d_close = safe_float(d.get('close', 0)) or 0
-                    if d_high > 0 and d_close > 0 and d_high >= d_close * 1.095:
+                    d_pre_close = safe_float(d.get('pre_close', 0)) or 0
+                    if d_pre_close > 0 and d_high >= d_pre_close * 1.095:
                         today_high_touched_zt = True
 
             if today_high_touched_zt:
@@ -394,7 +390,7 @@ def score_sentiment(code):
             import requests as _req2
             from scripts import proxy_utils as _pu2
             proxies2 = _pu2.get_proxies_dict() if _pu2.is_proxy_enabled() else None
-            market = '0' if code_short.startswith(('00','30')) else '1'
+            market = '0' if code_short.startswith(('00', '30', '8', '4')) else '1'
             url2 = f"https://push2.eastmoney.com/api/qt/stock/get?secid={market}.{code_short}&fields=f43,f44,f45,f46,f47,f48,f49,f50,f51,f52,f53,f54,f55,f57,f58,f168,f170,f171,f292"
             resp2 = _req2.get(url2, proxies=proxies2, timeout=5)
             d2 = resp2.json().get("data", {})
@@ -454,7 +450,7 @@ def score_sentiment(code):
         avg_premium = 0
         up_items = [x for x in limit_data if str(x.get('limit', '')).upper() == 'U']
         if up_items:
-            premiums = [safe_float(x.get('pct_change', 0)) for x in up_items]
+            premiums = [safe_float(x.get('pct_chg', 0)) for x in up_items]
             avg_premium = sum(premiums) / len(premiums) if premiums else 0
 
         if avg_premium >= 1.5:
@@ -533,21 +529,36 @@ def score_sentiment(code):
                 theme_score += 2
                 theme_reasons.append(f"题材第{theme_rank}+2")
 
-        # [发酵强度] V2.3增加持平条件（≥前日涨停数）
+        # [发酵强度] V2.3 增加持平条件（≥前日涨停数）
+        # 修复: 移除 prev_ul_cnt = best_ul_cnt 自等恒真 Bug
         if best_ul_cnt >= 3:
-            # 获取前日涨停数（从历史cpt数据或简单代理）
-            prev_ul_cnt = best_ul_cnt  # 默认持平
+            prev_ul_cnt = 0
             try:
                 yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
-                # 检查不可用则跳过
-            except:
+                resp_prev = call_tushare("limit_cpt_list", token, {"trade_date": yesterday},
+                                         "ts_code,name,up_nums")
+                prev_items = resp_prev.get("data", {}).get("items", [])
+                prev_fields = resp_prev.get("data", {}).get("fields", [])
+                if prev_items and prev_fields:
+                    for item in prev_items:
+                        d = dict(zip(prev_fields, item))
+                        if d.get("name") == best_concept:
+                            prev_ul_cnt = safe_int(d.get("up_nums", 0)) or 0
+                            break
+            except Exception:
                 pass
-            if best_ul_cnt >= prev_ul_cnt:  # 递增或持平
+            if prev_ul_cnt > 0 and best_ul_cnt > prev_ul_cnt:
                 theme_score += 8
-                theme_reasons.append(f"{best_concept}涨停{best_ul_cnt}只+8")
-            else:
+                theme_reasons.append(f"{best_concept}涨停{best_ul_cnt}只(↑{best_ul_cnt-prev_ul_cnt})+8")
+            elif prev_ul_cnt > 0 and best_ul_cnt == prev_ul_cnt:
+                theme_score += 5
+                theme_reasons.append(f"{best_concept}涨停{best_ul_cnt}只(持平)+5")
+            elif prev_ul_cnt > 0 and best_ul_cnt < prev_ul_cnt:
                 theme_score += 3
-                theme_reasons.append(f"题材涨停{best_ul_cnt}只+3")
+                theme_reasons.append(f"{best_concept}涨停{best_ul_cnt}只(↓{prev_ul_cnt-best_ul_cnt})+3")
+            else:
+                theme_score += 6  # 无前日对照, 给基础分
+                theme_reasons.append(f"{best_concept}涨停{best_ul_cnt}只+6")
 
         # [资金共识] 题材主力净流入排名前5 → +7分
         # T+1场景无实时主力净流入数据，用涨停数代理
@@ -794,11 +805,12 @@ def score_sentiment(code):
     # V2.3: 高位情绪折扣 — 个股连板高度≥5板时对总分施加折扣系数
     stock_continuity = 0
     try:
-        resp_sc = call_tushare("limit_step", token, {"trade_date": today_str, "ts_code": code}, "trade_date,ts_code,nums")
-        sc_items = resp_sc.get("data", {}).get("items", [])
-        if sc_items:
-            stock_continuity = safe_int(sc_items[0][2]) or 0
-    except:
+        # 复用已获取的 step_data(line 67), 避免重复调 limit_step
+        for item in step_data:
+            if item.get("ts_code") == code:
+                stock_continuity = safe_int(item.get("nums", 0)) or 0
+                break
+    except Exception:
         pass
 
     if stock_continuity >= 5:
