@@ -1,0 +1,45 @@
+{
+  "timestamp": "2026-05-23T22:01:31.965777",
+  "summary": true,
+  "alerts": [
+    {
+      "severity": "🔴",
+      "msg": "Eastmoney 接口不可达: HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded "
+    }
+  ],
+  "tushare": {
+    "daily": {
+      "ok": true,
+      "ms": 336,
+      "items": 0,
+      "error": null
+    },
+    "limit_list_d": {
+      "ok": true,
+      "ms": 219,
+      "items": 0,
+      "error": null
+    },
+    "daily_basic": {
+      "ok": true,
+      "ms": 362,
+      "items": 6000,
+      "error": null
+    }
+  },
+  "eastmoney": {
+    "ok": false,
+    "ms": 3461,
+    "items": 0,
+    "error": "HTTPSConnectionPool(host='push2.eastmoney.com', port=443): Max retries exceeded "
+  },
+  "deepseek": {
+    "ok": true,
+    "ms": 0,
+    "error": "未配置（跳过）",
+    "skipped": true
+  },
+  "agents": {},
+  "candidates": 0,
+  "pushed": 0
+}

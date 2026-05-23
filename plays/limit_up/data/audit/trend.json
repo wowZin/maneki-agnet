@@ -1,0 +1,19 @@
+{
+  "days": [
+    {
+      "date": "20260523",
+      "audits": [
+        {
+          "time": "21:58:48",
+          "summary": true,
+          "alert_count": 0
+        },
+        {
+          "time": "22:01:31",
+          "summary": true,
+          "alert_count": 1
+        }
+      ]
+    }
+  ]
+}

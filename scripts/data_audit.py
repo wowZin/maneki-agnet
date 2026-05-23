@@ -464,13 +464,19 @@ def _update_trend(record: dict):
 
 
 async def _send_feishu(text: str, alert_only: bool = False):
-    """发送消息到飞书告警群"""
+    """发送消息到飞书告警群（使用推送 APP 凭证，非回调 BOT 凭证）"""
     if not ALERT_CHAT_ID:
         print("⚠️ 未配置 FEISHU_ALERT_CHAT_ID，跳过飞书推送")
         return
     try:
-        from feishu_bot.feishu_client import FEISHU_CLIENT
-        await FEISHU_CLIENT.send_text(ALERT_CHAT_ID, text)
+        from feishu_bot.feishu_client import FeishuClient
+        app_id = os.getenv("FEISHU_APP_ID", "")
+        app_secret = os.getenv("FEISHU_APP_SECRET", "")
+        if not app_id or not app_secret:
+            print("⚠️ 未配置 FEISHU_APP_ID/FEISHU_APP_SECRET，跳过飞书推送")
+            return
+        client = FeishuClient(app_id, app_secret)
+        await client.send_text(ALERT_CHAT_ID, text)
         print(f"✅ 已推送审计报告到飞书告警群")
     except Exception as e:
         print(f"⚠️ 飞书推送失败: {e}")
