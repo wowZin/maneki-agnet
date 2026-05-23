@@ -205,10 +205,21 @@ def _get_jj_data_eastmoney(code: str) -> dict:
     具体接口名以实际可用为准。
     """
     result = {}
+
+    # ── 代理模块初始化（优雅降级：import失败则直连） ──
+    _use_proxy = False
+    _get_proxies = None
     try:
         from scripts.proxy_utils import get_proxies, USE_PROXY
+        _use_proxy = USE_PROXY
+        _get_proxies = get_proxies
+    except Exception:
+        pass  # 代理模块不可用 → 直连
+
+    try:
         sess = requests.Session()
-        sess.proxies = get_proxies() if USE_PROXY else {}
+        if _use_proxy and _get_proxies is not None:
+            sess.proxies = _get_proxies()
         sess.headers.update({
             "User-Agent": "Mozilla/5.0",
             "Referer": "https://quote.eastmoney.com/",
@@ -368,20 +379,28 @@ def _score_momentum(code: str, cache: dict) -> tuple:
     daily_data = cache.get("daily_data")
 
     if hist_ul is not None and not hist_ul.empty:
-        # 连板数
+        # 检查最近一次涨停是否是今天（判断当前是否在连板中）
+        latest_ul_date = str(hist_ul.iloc[0].get("trade_date", ""))
+        is_current_limit_up = (latest_ul_date == _today_str())
+
+        # 连板数 — 只有今天还在涨停中才计当前连板
         limit_times = _safe_float(hist_ul.iloc[0].get("limit_times", 0))
-        if limit_times >= 4:
+        if is_current_limit_up and limit_times >= 4:
             score += 50
             reasons.append(f"{int(limit_times)}连板+50")
-        elif limit_times == 3:
+        elif is_current_limit_up and limit_times == 3:
             score += 40
             reasons.append("3连板+40")
-        elif limit_times == 2:
+        elif is_current_limit_up and limit_times == 2:
             score += 30
             reasons.append("2连板+30")
-        elif limit_times >= 1:
+        elif is_current_limit_up and limit_times >= 1:
             score += 15
             reasons.append("首板+15")
+        elif not is_current_limit_up and limit_times >= 1:
+            # 断板日：给一个基因分，但不像连板那么多
+            reasons.append(f"断板(历史{int(limit_times)}连板)")
+            score += 5
 
         # 涨停基因：近30天涨停次数
         recent_count = len(hist_ul)
@@ -447,9 +466,8 @@ def _score_open_battle(code: str, cache: dict) -> tuple:
         first_date = str(daily_data.iloc[0].get("trade_date", ""))
         if first_date == _today_str():
             today_row = daily_data.iloc[0]
-        elif len(daily_data) > 1:
-            # 今日无数据（盘前/休市）, 用最近交易日
-            today_row = daily_data.iloc[1]
+        else:
+            reasons.append(f"今日无数据(最近{first_date})")
 
     if today_row is not None:
         open_p = _safe_float(today_row.get("open", 0))
@@ -688,16 +706,24 @@ def _score_aggression(code: str, cache: dict) -> tuple:
     if len(daily_data) >= 2:
         today_row = daily_data.iloc[0]
         yesterday_row = daily_data.iloc[1]
-        y_pct = _safe_float(yesterday_row.get("pct_chg", 0))
-        t_open = _safe_float(today_row.get("open", 0))
-        t_pre = _safe_float(today_row.get("pre_close", 0))
-        t_pct = _safe_float(today_row.get("pct_chg", 0))
+        today_date = str(today_row.get("trade_date", ""))
+        yest_date = str(yesterday_row.get("trade_date", ""))
+        # 必须确认 today_row 是今天的数据，防止周末/盘前把昨天当今天
+        if today_date != _today_str():
+            pass  # 无今日数据，跳过弱转强判断
+        elif not yest_date or today_date <= yest_date:
+            pass  # 日期顺序异常，跳过
+        else:
+            y_pct = _safe_float(yesterday_row.get("pct_chg", 0))
+            t_open = _safe_float(today_row.get("open", 0))
+            t_pre = _safe_float(today_row.get("pre_close", 0))
+            t_pct = _safe_float(today_row.get("pct_chg", 0))
 
-        if y_pct >= 9.5 and t_pre > 0:
-            open_pct = (t_open / t_pre - 1) * 100
-            if -2 <= open_pct <= 2 and t_pct > 4:
-                score += 25
-                reasons.append(f"弱转强(昨涨停今开{open_pct:.1f}%今{t_pct:.1f}%)+25")
+            if y_pct >= 9.5 and t_pre > 0:
+                open_pct = (t_open / t_pre - 1) * 100
+                if -2 <= open_pct <= 2 and t_pct > 4:
+                    score += 25
+                    reasons.append(f"弱转强(昨涨停今开{open_pct:.1f}%今{t_pct:.1f}%)+25")
 
     total = min(score, 100)
     reason_str = "; ".join(reasons) if reasons else "无数据"
