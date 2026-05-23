@@ -1,0 +1,64 @@
+{
+  "timestamp": "2026-05-23T21:55:09.970522",
+  "summary": false,
+  "alerts": [
+    {
+      "severity": "🔴",
+      "msg": "Tushare daily 不可达: No module named 'plays.limit_up.pipeline'"
+    },
+    {
+      "severity": "🔴",
+      "msg": "Tushare limit_list_d 不可达: No module named 'plays.limit_up.pipeline'"
+    },
+    {
+      "severity": "🔴",
+      "msg": "Tushare daily_basic 不可达: No module named 'plays.limit_up.pipeline'"
+    },
+    {
+      "severity": "🔴",
+      "msg": "Eastmoney 接口不可达: No module named 'scripts'"
+    },
+    {
+      "severity": "🔴",
+      "msg": "DeepSeek 不可达: 未配置 DeepSeek API Key"
+    },
+    {
+      "severity": "🔴",
+      "msg": "proxy_utils 加载失败: No module named 'scripts'"
+    }
+  ],
+  "tushare": {
+    "daily": {
+      "ok": false,
+      "ms": 0,
+      "items": 0,
+      "error": "No module named 'plays.limit_up.pipeline'"
+    },
+    "limit_list_d": {
+      "ok": false,
+      "ms": 0,
+      "items": 0,
+      "error": "No module named 'plays.limit_up.pipeline'"
+    },
+    "daily_basic": {
+      "ok": false,
+      "ms": 0,
+      "items": 0,
+      "error": "No module named 'plays.limit_up.pipeline'"
+    }
+  },
+  "eastmoney": {
+    "ok": false,
+    "ms": 0,
+    "items": 0,
+    "error": "No module named 'scripts'"
+  },
+  "deepseek": {
+    "ok": false,
+    "ms": 0,
+    "error": "未配置 DeepSeek API Key"
+  },
+  "agents": {},
+  "candidates": 0,
+  "pushed": 0
+}
