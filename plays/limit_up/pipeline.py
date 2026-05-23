@@ -852,17 +852,6 @@ def main():
         s_reason = reasons.get("sentiment", "")
         st_reason = reasons.get("shortterm", "")
         
-        f_score = scores.get("fundamental", 0)
-        t_score = scores.get("technical", 0)
-        m_score = scores.get("fundflow", 0)
-        s_score = scores.get("sentiment", 0)
-        st_score = scores.get("shortterm", 0)
-        f_reason = reasons.get("fundamental", "")
-        t_reason = reasons.get("technical", "")
-        m_reason = reasons.get("fundflow", "")
-        s_reason = reasons.get("sentiment", "")
-        st_reason = reasons.get("shortterm", "")
-        
         # V2.6: 加权Top3择优（按加权贡献选前3维，取加权均值）
         # 让权重真正影响哪3个维度进Top3以及贡献大小
         dim_contribs = [
