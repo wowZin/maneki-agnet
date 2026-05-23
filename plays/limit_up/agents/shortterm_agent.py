@@ -293,20 +293,20 @@ def _score_seal_quality(code: str, cache: dict) -> tuple:
                 minute = int(open_time[2:4])
                 hm = hour * 100 + minute
                 if hm <= 930:
-                    score += 35
-                    reasons.append("开盘秒板+35")
+                    score += 50
+                    reasons.append("开盘秒板+50")
                 elif hm <= 1000:
-                    score += 30
-                    reasons.append("30分内封板+30")
+                    score += 40
+                    reasons.append("30分内封板+40")
                 elif hm <= 1030:
-                    score += 20
-                    reasons.append("早盘封板+20")
+                    score += 25
+                    reasons.append("早盘封板+25")
                 elif hm <= 1130:
-                    score += 15
-                    reasons.append("午前封板+15")
+                    score += 20
+                    reasons.append("午前封板+20")
                 else:
-                    score += 5
-                    reasons.append("午后封板+5")
+                    score += 10
+                    reasons.append("午后封板+10")
             except Exception:
                 pass
 
@@ -319,31 +319,31 @@ def _score_seal_quality(code: str, cache: dict) -> tuple:
             seal_mv_ratio = first_amount / (free_share * 10000 * close_price)
 
         if seal_mv_ratio > 0.15:  # 封单>15%流通市值，极强
+            score += 50
+            reasons.append(f"封单流通比{seal_mv_ratio:.1%}+50")
+        elif seal_mv_ratio > 0.10:  # >10%，强势
             score += 35
             reasons.append(f"封单流通比{seal_mv_ratio:.1%}+35")
-        elif seal_mv_ratio > 0.10:  # >10%，强势
-            score += 30
-            reasons.append(f"封单流通比{seal_mv_ratio:.1%}+30")
         elif seal_mv_ratio > 0.05:
-            score += 20
-            reasons.append(f"封单流通比{seal_mv_ratio:.1%}+20")
+            score += 25
+            reasons.append(f"封单流通比{seal_mv_ratio:.1%}+25")
         elif seal_mv_ratio > 0.02:
+            score += 15
+            reasons.append(f"封单流通比{seal_mv_ratio:.1%}+15")
+        elif first_amount > 0:
             score += 10
             reasons.append(f"封单流通比{seal_mv_ratio:.1%}+10")
-        elif first_amount > 0:
-            score += 5
-            reasons.append(f"封单流通比{seal_mv_ratio:.1%}+5")
 
         # 撤单强度 (终封/首封)
         last_amount = _safe_float(row.get("last_limit_amount", 0))
         if first_amount > 0 and last_amount > 0:
             seal_ratio = last_amount / first_amount
             if seal_ratio < 0.3:
-                score -= 15
-                reasons.append("大幅撤单-15")
+                score -= 20
+                reasons.append("大幅撤单-20")
             elif seal_ratio < 0.6:
-                score -= 5
-                reasons.append("部分撤单-5")
+                score -= 10
+                reasons.append("部分撤单-10")
     else:
         # 今日未涨停 / 无数据
         hist_ul = cache.get("limit_history")
@@ -443,11 +443,13 @@ def _score_open_battle(code: str, cache: dict) -> tuple:
     # 获取今日日线
     today_row = None
     if daily_data is not None and not daily_data.empty:
-        # daily_data 按 trade_date 降序排列, iloc[0] 是今天
-        if _safe_float(daily_data.iloc[0].get("pct_chg", 0)) != 0:
+        # daily_data 按 trade_date 降序排列, iloc[0] 是最近交易日
+        first_date = str(daily_data.iloc[0].get("trade_date", ""))
+        if first_date == _today_str():
             today_row = daily_data.iloc[0]
         elif len(daily_data) > 1:
-            today_row = daily_data.iloc[1]  # 用最近有数据的
+            # 今日无数据（盘前/休市）, 用最近交易日
+            today_row = daily_data.iloc[1]
 
     if today_row is not None:
         open_p = _safe_float(today_row.get("open", 0))
@@ -594,26 +596,34 @@ def _score_sector(code: str, cache: dict) -> tuple:
     # 精确匹配所属概念中最大涨停数
     max_ul = max([_match_concept_ul_cnt(n, concept_ul_cnt) for n in concept_names], default=0)
 
-    if max_ul >= 10:
-        score += 40
-        reasons.append(f"板块爆发(概念涨停{max_ul}只)+40")
+    if max_ul >= 20:
+        score += 60
+        reasons.append(f"板块涨停潮(概念涨停{max_ul}只)+60")
+    elif max_ul >= 10:
+        score += 50
+        reasons.append(f"板块爆发(概念涨停{max_ul}只)+50")
     elif max_ul >= 5:
-        score += 30
-        reasons.append(f"板块强联动({max_ul}只涨停)+30")
+        score += 35
+        reasons.append(f"板块强联动({max_ul}只涨停)+35")
     elif max_ul >= 3:
-        score += 20
-        reasons.append(f"板块有热点({max_ul}只涨停)+20")
+        score += 25
+        reasons.append(f"板块有热点({max_ul}只涨停)+25")
     elif max_ul >= 1:
-        score += 10
-        reasons.append(f"板块跟风({max_ul}只涨停)+10")
+        score += 15
+        reasons.append(f"板块跟风({max_ul}只涨停)+15")
     else:
         reasons.append("所属概念无涨停")
+        score += 5  # 有概念数据的基础分
 
     # 自身地位: 是否在今日涨停池中
     today_limit_set = cache.get("today_limit_set", set())
     if code in today_limit_set and max_ul > 0:
         score += 15
         reasons.append("自身涨停+15")
+        # 板块龙头身位: 自身涨停 + 概念≥5只涨停 → 板块前排股
+        if max_ul >= 5:
+            score += 20
+            reasons.append("板块前排+20")
 
     total = min(score, 100)
     reason_str = "; ".join(reasons) if reasons else "无数据"
@@ -665,14 +675,14 @@ def _score_aggression(code: str, cache: dict) -> tuple:
 
         total_limit = len(limit_up_dates)
         if total_limit > 0 and high_open_count / total_limit > 0.5:
-            score += 8
-            reasons.append(f"涨停高开率{high_open_count}/{total_limit}>50%+8")
+            score += 40
+            reasons.append(f"涨停高开率{high_open_count}/{total_limit}>50%+40")
 
     # ② 近10日最大单日涨幅>7%
     max_pct = recent.head(10)["pct_chg"].max()
     if max_pct > 7:
-        score += 7
-        reasons.append(f"近10日最大涨幅{max_pct:.1f}%+7")
+        score += 35
+        reasons.append(f"近10日最大涨幅{max_pct:.1f}%+35")
 
     # ③ 昨涨停 + 今弱转强
     if len(daily_data) >= 2:
@@ -686,10 +696,10 @@ def _score_aggression(code: str, cache: dict) -> tuple:
         if y_pct >= 9.5 and t_pre > 0:
             open_pct = (t_open / t_pre - 1) * 100
             if -2 <= open_pct <= 2 and t_pct > 4:
-                score += 5
-                reasons.append(f"弱转强(昨涨停今开{open_pct:.1f}%今{t_pct:.1f}%)+5")
+                score += 25
+                reasons.append(f"弱转强(昨涨停今开{open_pct:.1f}%今{t_pct:.1f}%)+25")
 
-    total = min(score, 20)
+    total = min(score, 100)
     reason_str = "; ".join(reasons) if reasons else "无数据"
     return max(total, 0), f"[攻击] {reason_str}"
 
@@ -794,8 +804,8 @@ def score_shortterm(code: str) -> tuple:
         + agg_s * weights["aggression"]
     )
 
-    # 集合竞价作为额外加分（最多+5分，不加权）
-    total += jj_s * 0.05  # 竞价因子微量权重
+    # 集合竞价作为额外加分
+    total += jj_s * 0.3  # 竞价因子, 最高加4.5分
 
     parts = [seal_r, momentum_r, open_r, sector_r, agg_r]
     if jj_r:
