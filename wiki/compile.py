@@ -137,6 +137,11 @@ tags: [daily, scan]
 |:---:|:----:|:----:|:----:|
 """ + "\n".join(f"| {i+1} | {c} | {n} | {s:.1f} |" for i, (c, n, s) in enumerate(top10))
 
+    # 推送与命中分析
+    push_section = _compile_push_analysis(trade_date)
+    if push_section:
+        content += "\n\n" + push_section
+
     # 写入文件
     page_name = f"{trade_date}-扫描汇总.md"
     page_path = ENTITIES_DIR / page_name
@@ -150,6 +155,101 @@ tags: [daily, scan]
     update_log(trade_date, page_name, n, total_avg)
 
     return True
+
+
+def _compile_push_analysis(trade_date: str) -> str:
+    """编译推送记录与实际涨停命中分析"""
+    import requests, os
+    from pathlib import Path
+
+    PUSHED_DIR = PROJECT_DIR / "data" / "pushed"
+
+    # 读取当日所有推送记录
+    pushed_files = sorted(PUSHED_DIR.glob(f"{trade_date}*.json"))
+    if not pushed_files:
+        return ""
+
+    all_pushed = []
+    seen = set()
+    for f in pushed_files:
+        try:
+            with open(f) as fh:
+                d = json.load(fh)
+            for item in (d if isinstance(d, list) else []):
+                code = item.get("code", "").split(".")[0]
+                if code and code not in seen:
+                    seen.add(code)
+                    all_pushed.append({
+                        "code": code,
+                        "name": item.get("name", ""),
+                        "total": item.get("total", 0),
+                        "time": f.stem.split("_")[1][:2] + ":" + f.stem.split("_")[1][2:4],
+                    })
+        except Exception:
+            pass
+
+    if not all_pushed:
+        return ""
+
+    # 获取实际涨停数据
+    limit_codes = set()
+    try:
+        token = ""
+        env_file = PROJECT_DIR / ".env"
+        if env_file.exists():
+            for line in env_file.read_text().split("\n"):
+                if line.startswith("TUSHARE_TOKEN="):
+                    token = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+        if token:
+            payload = {
+                "api_name": "limit_list_d",
+                "token": token,
+                "params": {"trade_date": trade_date, "limit_type": "U"},
+            }
+            resp = requests.post("http://api.tushare.pro", json=payload, timeout=15)
+            data = resp.json()
+            if data.get("code") == 0:
+                fields = data["data"]["fields"]
+                idx = {f: i for i, f in enumerate(fields)}
+                for item in data["data"]["items"]:
+                    code = item[idx.get("ts_code", 0)].split(".")[0]
+                    if not code.startswith(("300", "301", "688", "8")):
+                        limit_codes.add(code)
+    except Exception as e:
+        print(f"  ⚠️ 拉取涨停数据失败: {e}")
+
+    # 标记命中
+    hits = 0
+    for p in all_pushed:
+        p["hit"] = p["code"] in limit_codes
+        if p["hit"]:
+            hits += 1
+
+    total = len(all_pushed)
+    hit_rate = round(hits / total * 100, 1) if total > 0 else 0
+
+    # 构建markdown
+    hit_rows = "\n".join(
+        f"| {p['time']} | {p['code']} | {p['name']} | {p['total']:.1f} | {'✅' if p['hit'] else '❌'} |"
+        for p in all_pushed
+    )
+
+    section = f"""## 推送与命中分析
+
+| 指标 | 值 |
+|------|:---:|
+| 推送总次数 | {len(pushed_files)} 次 |
+| 去重推送股票 | {total} 只 |
+| 实际涨停 | {hits} 只 |
+| 推送命中率 | {hit_rate}% |
+
+### 推送明细
+
+| 时间 | 代码 | 名称 | 总分 | 涨停 |
+|:---:|:----:|:----:|:----:|:---:|
+{hit_rows}"""
+    return section
 
 
 def update_index(trade_date: str, date_display: str, page_name: str, count: int):
