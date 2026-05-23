@@ -605,31 +605,67 @@ def _query_wiki(text: str) -> str | None:
     """从 wiki 知识库查找匹配内容，AI 合成回答"""
     try:
         import subprocess
+        import re as _re
 
-        # 搜索 concepts/ + entities/ + queries/ 下的所有 .md 文件
+        # 提取搜索词：英文按单词、中文按停用词切分
+        stop_words = {"的", "了", "是", "在", "有", "和", "就", "不", "也", "都", "要",
+                      "吗", "啊", "呢", "吧", "哦", "嗯", "哈", "呀", "我", "你", "他",
+                      "这", "那", "哪", "什么", "怎么", "如何", "哪些", "多少"}
+        words = set()
+        # 英文/数字词
+        for w in _re.findall(r"[A-Za-z0-9_]{2,}", text):
+            words.add(w.lower())
+        # 中文词：按停用词切分后取2字以上片段
+        cn_text = _re.sub(r"[A-Za-z0-9_\s]", "", text)
+        for s in _re.split(r"[" + "".join(stop_words) + r"]", cn_text):
+            s = s.strip()
+            if len(s) >= 2:
+                # 再切成2-3字片段
+                for i in range(len(s) - 1):
+                    words.add(s[i:i+2])
+                if len(s) >= 4:
+                    words.add(s)
+
+        if not words:
+            return None
+
+        # 搜索 concepts/ + entities/ + queries/
         grep_dirs = [
             str(WIKI_PATH / "concepts"),
             str(WIKI_PATH / "entities"),
             str(WIKI_PATH / "queries"),
         ]
         matched_files = set()
-        for d in grep_dirs:
-            result = subprocess.run(
-                ["grep", "-rli", text, d],
-                capture_output=True, text=True, timeout=5
-            )
-            if result.stdout.strip():
-                for p in result.stdout.strip().split("\n"):
-                    p = p.strip()
-                    if p:
-                        matched_files.add(p)
+        for w in words:
+            for d in grep_dirs:
+                result = subprocess.run(
+                    ["grep", "-rli", w, d],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.stdout.strip():
+                    for p in result.stdout.strip().split("\n"):
+                        p = p.strip()
+                        if p:
+                            matched_files.add(p)
 
         if not matched_files:
             return None
 
-        # 读取匹配文件内容（取前 80 行）
+        # 按匹配文件数排序（匹配词最多的文件排前面）
+        file_scores = {}
+        for fp in matched_files:
+            score = 0
+            content = Path(fp).read_text(encoding="utf-8")
+            for w in words:
+                if w in content:
+                    score += 1
+            file_scores[fp] = score
+
+        top_files = sorted(file_scores.keys(), key=lambda x: file_scores[x], reverse=True)[:3]
+
+        # 读取匹配文件内容
         contexts = []
-        for fp in sorted(matched_files)[:3]:
+        for fp in top_files:
             fpath = Path(fp)
             if fpath.exists():
                 content = fpath.read_text(encoding="utf-8")
@@ -637,9 +673,6 @@ def _query_wiki(text: str) -> str | None:
                 body = parts[2].strip() if len(parts) >= 3 else content
                 lines = body.split("\n")
                 contexts.append(f"--- {fpath.name} ---\n" + "\n".join(lines[:80]))
-
-        if not contexts:
-            return None
 
         wiki_context = "\n\n".join(contexts)
 
@@ -659,11 +692,11 @@ def _query_wiki(text: str) -> str | None:
 知识库内容:
 {wiki_context}
 
-请根据知识库内容回答用户的问题。要求：
-1. 用简洁易懂的语言回答
-2. 如果知识库中有相关数据（如推送记录、评分等），直接引用
-3. 如果知识库中没有相关信息，请说明不知道
-4. 回答控制在 150 字以内"""
+请严格按照知识库内容回答。要求：
+1. [重要] 如果 entities/ 中有具体的日期数据、推送记录、命中明细，**必须优先引用**
+2. 如果知识库中有具体数字（如推送X只、命中Y只、覆盖率Z%），直接给出
+3. 用简洁易懂的语言，控制在 150 字以内
+4. 如果没有相关信息，说"知识库中没有相关数据"""
 
         resp = _requests.post(
             f"{_mc.get('base_url', 'https://api.deepseek.com')}/chat/completions",
@@ -725,18 +758,11 @@ async def handle_message_event(event: dict):
         )
         return
 
-    # ── 1.5 知识库查询（非股票问题但可能是知识询问）──
-    wiki_keywords = ["什么是", "怎么算", "什么意思", "如何计算", "指的是",
-                     "AUC", "涨停均排", "信号池", "加权Top3", "Top3择优",
-                     "分差", "覆盖率", "命中率", "鉴别力", "阈值",
-                     "基本面", "技术面", "资金面", "情绪面", "短线博弈",
-                     "评分", "权重", "星级", "评级"]
-    need_wiki = any(kw in text for kw in wiki_keywords)
-    if need_wiki:
-        wiki_answer = _query_wiki(text)
-        if wiki_answer:
-            await FEISHU_CLIENT.reply_markdown(message_id, wiki_answer)
-            return
+    # ── 1.5 知识库查询 — try wiki first（任何非股票问题都试试）──
+    wiki_answer = _query_wiki(text)
+    if wiki_answer:
+        await FEISHU_CLIENT.reply_markdown(message_id, wiki_answer)
+        return
 
     codes = parse_stock_codes(text)
     if not codes:
