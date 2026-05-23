@@ -173,16 +173,30 @@ def _get_realtime_quote(code: str) -> dict:
             print(f"  [盘中行情] {code} 失败: {e}")
         return {"price": 0, "change_pct": 0}
 
-    # ── 盘后：Tushare daily ──
+    # ── 盘后：Tushare daily（查最近交易日收盘数据）──
     try:
         import os as _os
         import tushare as _ts
+        from datetime import timedelta
         from dotenv import load_dotenv
         load_dotenv(PROJECT_DIR / ".env")
         _ts.set_token(_os.getenv("TUSHARE_TOKEN", ""))
         pro = _ts.pro_api()
-        df = pro.daily(ts_code=code, start_date=datetime.now().strftime("%Y%m%d"),
-                      end_date=datetime.now().strftime("%Y%m%d"),
+
+        # 从今天往前找最近交易日（最多查10天）
+        trade_date = None
+        for i in range(10):
+            check = (datetime.now() - timedelta(days=i)).strftime("%Y%m%d")
+            cal = pro.trade_cal(start_date=check, end_date=check)
+            if cal is not None and len(cal) > 0 and cal.iloc[0]["is_open"] == 1:
+                trade_date = check
+                break
+
+        if not trade_date:
+            return {"price": 0, "change_pct": 0}
+
+        df = pro.daily(ts_code=code, start_date=trade_date,
+                      end_date=trade_date,
                       fields="trade_date,close,pct_chg")
         if df is not None and len(df) > 0:
             row = df.iloc[0]
