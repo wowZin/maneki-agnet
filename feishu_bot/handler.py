@@ -1,4 +1,10 @@
-"""消息处理器 — 解析飞书消息 → 调用评分 → 返回结果卡片"""
+"""消息处理器 — 解析飞书消息 → 调用评分 → 返回结果卡片
+
+功能:
+- 股票分析：@机器人 平安银行 或 @机器人 000001.SZ
+- 追问指标：@机器人 基本面为什么这么低？(基于上次分析)
+- 非股票问题：友好拒绝并说明能力范围
+"""
 
 import json
 import re
@@ -22,9 +28,46 @@ from feishu_bot.feishu_client import FEISHU_CLIENT, BOT_CHAT_ID
 STOCK_CODE_PATTERN = re.compile(r"\b(\d{6})(?:\.(SH|SZ))?\b")
 SKIP_WORDS = {"机器人", "扫描", "大盘", "股票", "分析", "查看", "查询", "今天", "明天"}
 
+# 维度关键词（用于追问检测）
+DIM_KEYWORDS = {
+    "fundamental": {"基本面", "基本", "业绩", "利润", "营收", "ROE", "财务"},
+    "technical": {"技术面", "技术", "K线", "均线", "MACD", "KDJ", "形态", "走势"},
+    "fundflow": {"资金面", "资金", "主力", "流入", "流出", "龙虎榜", "盘口"},
+    "sentiment": {"情绪面", "情绪", "热度", "连板", "竞价", "封板", "炸板"},
+    "shortterm": {"短线博弈", "短线", "博弈", "封单", "攻击"},
+}
+ALL_DIM_KEYWORDS = set().union(*DIM_KEYWORDS.values())
+
+# 闲聊/非股票关键词
+NON_STOCK_PATTERNS = [
+    re.compile(r"你好|您好|嗨|hi|hello|在吗", re.I),
+    re.compile(r"天气|温度|下雨|台风"),
+    re.compile(r"你是谁|你叫什么|你是什么|介绍.*自己"),
+    re.compile(r"能做什么|你会什么|有什么功能"),
+    re.compile(r"谢谢|感谢|再见|拜拜|晚安"),
+]
+
+# ── 会话记忆（最近一次分析的股票，按 chat_id 存储）──
+_last_analysis: dict[str, dict] = {}
+
+
+def _save_last_analysis(chat_id: str, data: dict):
+    _last_analysis[chat_id] = {"data": data, "time": datetime.now()}
+
+
+def _get_last_analysis(chat_id: str) -> dict | None:
+    entry = _last_analysis.get(chat_id)
+    if entry:
+        # 30分钟内有效
+        if (datetime.now() - entry["time"]).total_seconds() < 1800:
+            return entry["data"]
+    return None
+
+
+# ── 股票名称→代码映射 ─────────────────────────────────────
+
 
 def _build_name_to_code() -> dict[str, str]:
-    """从 tushare 获取全量股票列表，建立 名称→代码 映射"""
     try:
         import tushare as ts
         import os
@@ -57,12 +100,7 @@ def get_name_to_code() -> dict[str, str]:
 
 
 def parse_stock_codes(text: str) -> list[str]:
-    """从消息文本中提取股票代码（支持代码和名称）
-
-    先匹配 6 位代码，再匹配中文名称（按名称长度降序匹配）。
-    """
     codes = []
-
     # 1. 6位数字代码
     for match in STOCK_CODE_PATTERN.finditer(text):
         raw_code, market = match.groups()
@@ -73,7 +111,7 @@ def parse_stock_codes(text: str) -> list[str]:
         elif raw_code.startswith(("0", "3")):
             codes.append(f"{raw_code}.SZ")
 
-    # 2. 中文名称（按长度降序匹配）
+    # 2. 中文名称
     mapping = get_name_to_code()
     sorted_names = sorted(mapping.keys(), key=len, reverse=True)
     for name in sorted_names:
@@ -89,15 +127,101 @@ def parse_stock_codes(text: str) -> list[str]:
 
 
 def clean_mention(text: str) -> str:
-    """去掉 @机器人 标签"""
     return re.sub(r"<at[^>]*>.*?</at>", "", text).strip()
+
+
+# ── 非股票问题检测 ─────────────────────────────────────────
+
+
+def is_non_stock_message(text: str) -> bool:
+    """检测是否为明显的非股票问题"""
+    for pattern in NON_STOCK_PATTERNS:
+        if pattern.search(text):
+            return True
+    return False
+
+
+# ── 追问检测 ──────────────────────────────────────────────
+
+
+def detect_follow_up(text: str, last_data: dict | None) -> tuple[str | None, str | None]:
+    """检测是否为追问某个指标详情
+    返回: (维度名, 提示文本) 或 (None, None)
+    """
+    if not last_data:
+        return None, None
+
+    # 检查文本中是否包含维度关键词
+    matched_dims = []
+    for dim, keywords in DIM_KEYWORDS.items():
+        for kw in keywords:
+            if kw in text:
+                matched_dims.append(dim)
+                break
+
+    if matched_dims:
+        # 取匹配到的第一个维度
+        return matched_dims[0], None
+
+    # 通用追问："详细说说"、"为什么"、"解释一下"
+    detail_patterns = ["为什么", "解释", "详细", "说说", "怎么回事", "具体"]
+    for p in detail_patterns:
+        if p in text:
+            return "all", None
+
+    return None, None
+
+
+def get_dim_explanation(dim: str, score: float, reason: str) -> str:
+    """生成维度指标的详细解读"""
+    explanations = {
+        "fundamental": {
+            "name": "基本面",
+            "high": "基本面优秀，公司盈利能力和成长性良好",
+            "mid": "基本面中等，建议进一步查看具体财务指标",
+            "low": "基本面偏弱，盈利能力或成长性存在压力",
+        },
+        "technical": {
+            "name": "技术面",
+            "high": "技术形态良好，均线多头排列，走势健康",
+            "mid": "技术面中性，存在一定支撑但尚未形成明确趋势",
+            "low": "技术面偏弱，短期均线承压或形态不佳",
+        },
+        "fundflow": {
+            "name": "资金面",
+            "high": "主力资金积极关注，大单净流入明显",
+            "mid": "资金面中性偏多，存在一定资金关注",
+            "low": "资金面偏弱，主力参与度不高或存在流出压力",
+        },
+        "sentiment": {
+            "name": "情绪面",
+            "high": "市场情绪活跃，连板基因和封板质量良好",
+            "mid": "情绪面中性，市场关注度一般",
+            "low": "情绪面偏弱，缺乏短线资金合力",
+        },
+        "shortterm": {
+            "name": "短线博弈",
+            "high": "短线攻击性强，封板质量和竞价表现突出",
+            "mid": "短线博弈特征中等，存在一定攻击性",
+            "low": "短线博弈信号不明显，封板力度偏弱",
+        },
+    }
+
+    info = explanations.get(dim, {"name": dim, "high": "表现良好", "mid": "表现一般", "low": "表现偏弱"})
+    if score >= 60:
+        level_desc = info["high"]
+    elif score >= 40:
+        level_desc = info["mid"]
+    else:
+        level_desc = info["low"]
+
+    return f"**{info['name']} ({score:.0f}分) — {level_desc}**\n评分依据: {reason or '暂无详细数据'}"
 
 
 # ── 评分逻辑 ──────────────────────────────────────────────
 
 
 def _score_one_stock(code: str) -> dict:
-    """对单只股票运行五维度评分"""
     from zt_pipeline import (
         score_fundamental,
         score_technical,
@@ -128,8 +252,16 @@ def _score_one_stock(code: str) -> dict:
                 scores[dim] = 0.0
                 reasons[dim] = f"评分异常: {e}"
 
+    # V2.6: 加权Top3择优
+    dim_names = ["fundamental", "technical", "fundflow", "sentiment", "shortterm"]
     weights = AGENT_WEIGHTS
-    total = sum(scores[d] * weights[d] for d in weights) / sum(weights.values())
+    contribs = [(scores.get(d, 0) or 0, weights.get(d, 1.0)) for d in dim_names]
+    contribs.sort(key=lambda x: x[0] * x[1], reverse=True)
+    top3 = contribs[:3]
+    total_s = sum(s * w for s, w in top3)
+    total_w = sum(w for _, w in top3)
+    total = total_s / total_w if total_w > 0 else 0
+
     return {"code": code, "scores": scores, "reasons": reasons, "total": round(total, 1)}
 
 
@@ -137,17 +269,11 @@ def _score_one_stock(code: str) -> dict:
 
 
 def _get_realtime_quote(code: str) -> dict:
-    """获取个股实时行情（涨幅%、最新价）
-
-    盘中（9:15-15:00）：东财个股实时API + get_proxies_dict 代理直连
-    盘后（其他时间）：Tushare daily 收盘数据
-    """
     from scripts.zt_pipeline import is_trading_time
 
     raw = code.split(".")[0]
 
     if is_trading_time():
-        # ── 盘中：东财个股实时API ──
         try:
             import requests as _req
             import sys as _sys
@@ -173,7 +299,7 @@ def _get_realtime_quote(code: str) -> dict:
             print(f"  [盘中行情] {code} 失败: {e}")
         return {"price": 0, "change_pct": 0}
 
-    # ── 盘后：Tushare daily（查最近交易日收盘数据）──
+    # 盘后：Tushare daily
     try:
         import os as _os
         import tushare as _ts
@@ -183,7 +309,6 @@ def _get_realtime_quote(code: str) -> dict:
         _ts.set_token(_os.getenv("TUSHARE_TOKEN", ""))
         pro = _ts.pro_api()
 
-        # 从今天往前找最近交易日（最多查10天）
         trade_date = None
         for i in range(10):
             check = (datetime.now() - timedelta(days=i)).strftime("%Y%m%d")
@@ -211,7 +336,6 @@ def _get_realtime_quote(code: str) -> dict:
 
 
 def _positive_summary(result: dict, change_pct: float) -> str:
-    """根据评分和实时行情生成综合积极信号总结"""
     scores = result["scores"]
     total = result["total"]
     points = []
@@ -260,7 +384,6 @@ def _positive_summary(result: dict, change_pct: float) -> str:
 
 
 def _generate_ai_summary(result: dict, quote: dict | None = None) -> str:
-    """调用 DeepSeek 模型生成综合信号总结"""
     scores = result["scores"]
     reasons = result["reasons"]
     total = result["total"]
@@ -322,7 +445,6 @@ def _dim_label(dim: str) -> str:
 
 
 def _stars(total: float) -> str:
-    """星级: >=50:5星 >=40:4星 >=35:3星"""
     if total >= 50: return "⭐ ⭐ ⭐ ⭐ ⭐"
     if total >= 40: return "⭐ ⭐ ⭐ ⭐"
     if total >= 35: return "⭐ ⭐ ⭐"
@@ -330,20 +452,15 @@ def _stars(total: float) -> str:
 
 
 def _score_color(score: float) -> str:
-    if score >= 50:
-        return "green"
-    elif score >= 40:
-        return "blue"
-    elif score >= 35:
-        return "orange"
+    if score >= 50: return "green"
+    elif score >= 40: return "blue"
+    elif score >= 35: return "orange"
     return "red"
 
 
 def _change_color(pct: float) -> str:
-    if pct > 0:
-        return "green"
-    elif pct < 0:
-        return "red"
+    if pct > 0: return "green"
+    elif pct < 0: return "red"
     return "grey"
 
 
@@ -356,7 +473,6 @@ def _build_result_card(stock_name: str, result: dict, quote: dict | None = None)
     change_pct = (quote or {}).get("change_pct", 0)
     price = (quote or {}).get("price", 0)
 
-    # 标题行：综合评级 + 实时涨跌幅
     stars_str = _stars(total)
     header_lines = [f"**综合评级 {stars_str}**"]
     if change_pct is not None and change_pct != "":
@@ -365,7 +481,6 @@ def _build_result_card(stock_name: str, result: dict, quote: dict | None = None)
         header_lines.append(f"**现价: {price:.2f}**")
     header_content = "\n".join(header_lines)
 
-    # 各维度详情（五维度+短线博弈）
     score_lines = []
     for dim in ["fundamental", "technical", "fundflow", "sentiment", "shortterm"]:
         s = scores.get(dim, 0)
@@ -373,10 +488,14 @@ def _build_result_card(stock_name: str, result: dict, quote: dict | None = None)
         short_reason = r.split(";")[0] if r else "无数据"
         score_lines.append(f"**{_dim_label(dim)} {s:.0f}分**　{short_reason}")
 
+    tip_line = "\n💡 可追问指标详情，如：\"基本面为什么这么低？\"、\"资金面详细说说\""
+
     elements = [
         {"tag": "div", "text": {"tag": "lark_md", "content": header_content}},
         {"tag": "hr"},
         {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(score_lines)}},
+        {"tag": "hr"},
+        {"tag": "div", "text": {"tag": "lark_md", "content": tip_line}},
     ]
 
     return {
@@ -389,11 +508,15 @@ def _build_result_card(stock_name: str, result: dict, quote: dict | None = None)
     }
 
 
-def _build_error_card(code: str, error: str) -> dict:
+def _build_error_card(stock_name: str, error: str) -> dict:
+    friendly_msg = f"抱歉，分析 {stock_name} 时出了点问题。\n可能原因：\n1️⃣ 股票代码或名称不正确\n2️⃣ 数据源暂时不可用\n3️⃣ 该股票可能已退市或停牌\n\n请检查后重试。"
     return {
         "config": {"wide_screen_mode": True},
-        "header": {"title": {"tag": "plain_text", "content": f"⚠️ {code} 分析失败"}, "template": "red"},
-        "elements": [{"tag": "div", "text": {"tag": "lark_md", "content": f"错误: {error}"}}],
+        "header": {"title": {"tag": "plain_text", "content": f"⚠️ {stock_name} 分析失败"}, "template": "red"},
+        "elements": [
+            {"tag": "div", "text": {"tag": "lark_md", "content": friendly_msg}},
+            {"tag": "note", "element": {"tag": "plain_text", "content": f"错误详情: {error}"}},
+        ],
     }
 
 
@@ -411,14 +534,13 @@ def _get_stock_name(code: str) -> str:
             return df.iloc[0]["name"]
     except Exception:
         pass
-    return code
+    return code.split(".")[0]
 
 
 # ── 主入口 ────────────────────────────────────────────────
 
 
 async def handle_message_event(event: dict):
-    """处理飞书 im.message.receive_v1 事件"""
     message = event.get("message", {})
     chat_id = message.get("chat_id", BOT_CHAT_ID)
     message_id = message.get("message_id", "")
@@ -435,14 +557,60 @@ async def handle_message_event(event: dict):
     if not text.strip():
         return
 
-    codes = parse_stock_codes(text)
-    if not codes:
+    # ── 1. 检测是否为非股票问题 ──
+    if is_non_stock_message(text):
         await FEISHU_CLIENT.reply_text(
             message_id,
-            "📌 请带上股票代码或名称，例如：\n@机器人 000001.SZ\n@机器人 平安银行\n@机器人 贵州茅台 和 宁德时代"
+            "🤖 你好！我是 **Maneki 股票分析助手**，专注于A股个股分析。\n\n"
+            "**我可以帮你：**\n"
+            "✅ 分析某只股票，给出基本面/技术面/资金面/情绪面/短线博弈评分\n"
+            "✅ 追问指标详情，解读每个维度的具体依据\n"
+            "✅ 同时分析最多5只股票\n\n"
+            "**使用方法：**\n"
+            "@我 + 股票名称或代码，例如：\n"
+            "  @机器人 平安银行\n"
+            "  @机器人 000001.SZ\n"
+            "  @机器人 贵州茅台 和 宁德时代\n\n"
+            "分析完成后可追问：\"基本面为什么这么低？\"、\"资金面详细说说\""
         )
         return
 
+    # ── 2. 检测是否为追问某个指标 ──
+    codes = parse_stock_codes(text)
+    if not codes:
+        last = _get_last_analysis(chat_id)
+        dim, _ = detect_follow_up(text, last)
+        if dim and last:
+            if dim == "all":
+                # 全部维度详细解读
+                lines = []
+                for d in ["fundamental", "technical", "fundflow", "sentiment", "shortterm"]:
+                    score = last["result"]["scores"].get(d, 0)
+                    reason = last["result"]["reasons"].get(d, "")
+                    lines.append(get_dim_explanation(d, score, reason))
+                await FEISHU_CLIENT.reply_text(message_id, "\n\n".join(lines))
+            else:
+                score = last["result"]["scores"].get(dim, 0)
+                reason = last["result"]["reasons"].get(dim, "")
+                explanation = get_dim_explanation(dim, score, reason)
+                await FEISHU_CLIENT.reply_text(message_id, explanation)
+            return
+
+        # 既不是股票也不是追问 → 友好提示
+        await FEISHU_CLIENT.reply_text(
+            message_id,
+            "📌 我没有识别到股票代码或名称。\n\n"
+            "请这样使用：\n"
+            "  @机器人 平安银行\n"
+            "  @机器人 000001.SZ\n\n"
+            "或者对刚才的分析结果追问：\n"
+            "  \"基本面为什么这么低？\"\n"
+            "  \"技术面详细说说\"\n"
+            "  \"解释一下资金面\""
+        )
+        return
+
+    # ── 3. 执行分析 ──
     codes = codes[:5]
     code_list = ", ".join(codes)
     await FEISHU_CLIENT.reply_text(message_id, f"🔍 正在分析 {code_list}，请稍候...")
@@ -456,9 +624,13 @@ async def handle_message_event(event: dict):
                 stock_name = _get_stock_name(code)
                 quote = _get_realtime_quote(code)
                 card = _build_result_card(stock_name, result, quote)
+
+                # 保存到会话记忆（用于后续追问）
+                _save_last_analysis(chat_id, {"result": result, "stock_name": stock_name, "code": code})
+
                 await FEISHU_CLIENT.send_card(chat_id, card)
 
-                # 发送 AI 总结（纯文本）
+                # AI 总结
                 summary = _generate_ai_summary(result, quote)
                 if summary:
                     await FEISHU_CLIENT.send_text(
