@@ -778,11 +778,42 @@ def main():
         return
     
     # 2-5. 四维度评分 + 短线博弈
+    # 前置过滤：加载今日已分析过的股票得分，避免重复调用Tushare API
+    today_str = datetime.now().strftime("%Y%m%d")
+    scored_cache = {}  # {code: {dim: (score, reason)}}
+    analysis_dir = PROJECT_DIR / "data" / "analysis"
+    if analysis_dir.exists():
+        for f in sorted(analysis_dir.glob(f"{today_str}*.json")):
+            try:
+                items = json.loads(f.read_text())
+                if isinstance(items, list):
+                    for item in items:
+                        if "code" in item and "scores" in item:
+                            code = item["code"]
+                            scored_cache[code] = {
+                                dim: (item["scores"][dim], item.get("reasons", {}).get(dim, ""))
+                                for dim in item["scores"]
+                            }
+            except Exception:
+                pass
+    if scored_cache:
+        print(f"[缓存] 今日已有 {len(scored_cache)} 只股票的评分记录")
+
     results = []
     for stock in candidates:
         code = stock["code"]
         name = stock["name"]
         print(f"\n[分析] {code} {name}")
+        
+        # 今日已有评分 → 复用基本面和技术面（T+1静态数据），盘面实时 agent 仍重新评分
+        if code in scored_cache:
+            cached = scored_cache[code]
+            scores = {dim: v[0] for dim, v in cached.items()}
+            reasons = {dim: v[1] for dim, v in cached.items()}
+            print(f"  [缓存命中] {list(scores.keys())} 复用 {list(cached.keys())}")
+        else:
+            scores = {}
+            reasons = {}
         
         print("  五维度并行评分...", flush=True)
         from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -794,10 +825,10 @@ def main():
             "sentiment": score_sentiment,
             "shortterm": score_shortterm,
         }
-        scores = {}
-        reasons = {}
+        # 缓存命中时，跳过基本面和技术面的API调用
+        funcs_to_run = {dim: fn for dim, fn in scoring_funcs.items() if dim not in scores}
         with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = {executor.submit(fn, code): dim for dim, fn in scoring_funcs.items()}
+            futures = {executor.submit(fn, code): dim for dim, fn in funcs_to_run.items()}
             for future in as_completed(futures):
                 dim = futures[future]
                 try:
@@ -809,6 +840,17 @@ def main():
                     scores[dim] = 0
                     reasons[dim] = f"评分异常: {e}"
                     print(f"    {dim}: 异常 {e}")
+        
+        f_score = scores.get("fundamental", 0)
+        t_score = scores.get("technical", 0)
+        m_score = scores.get("fundflow", 0)
+        s_score = scores.get("sentiment", 0)
+        st_score = scores.get("shortterm", 0)
+        f_reason = reasons.get("fundamental", "")
+        t_reason = reasons.get("technical", "")
+        m_reason = reasons.get("fundflow", "")
+        s_reason = reasons.get("sentiment", "")
+        st_reason = reasons.get("shortterm", "")
         
         f_score = scores.get("fundamental", 0)
         t_score = scores.get("technical", 0)
