@@ -142,6 +142,11 @@ tags: [daily, scan]
     if push_section:
         content += "\n\n" + push_section
 
+    # 权重优化结果
+    weight_section = _compile_weight_analysis(trade_date)
+    if weight_section:
+        content += "\n\n" + weight_section
+
     # 写入文件
     page_name = f"{trade_date}-扫描汇总.md"
     page_path = ENTITIES_DIR / page_name
@@ -155,6 +160,35 @@ tags: [daily, scan]
     update_log(trade_date, page_name, n, total_avg)
 
     return True
+
+
+def _compile_weight_analysis(trade_date: str) -> str:
+    """编译权重优化结果"""
+    weight_file = PROJECT_DIR / "data" / "weights" / "ranking_optimized.json"
+    if not weight_file.exists():
+        return ""
+
+    try:
+        with open(weight_file) as f:
+            data = json.load(f)
+        base = data.get("baseline", {})
+        rec = data.get("recommended", {})
+
+        base_w = "  ".join(f"{DIM_CN[d]}={base['weights'][d]:.1f}" for d in DIMS) if base.get("weights") else "无"
+        base_push = f"信号池{base.get('pushed_count',0)}只(含涨停{base.get('push_limit_count',0)}只) 实战命中率{base.get('top3_hit_rate',0)}%"
+
+        section = f"""## 权重优化状态
+
+| 指标 | 值 |
+|------|:---:|
+| 当前权重 | {base_w} |
+| 信号池 | {base_push} |
+| 综合分 | {base.get('composite', '-')} |
+| AUC | {base.get('auc', '-')} |
+"""
+        return section
+    except Exception:
+        return ""
 
 
 def _compile_push_analysis(trade_date: str) -> str:

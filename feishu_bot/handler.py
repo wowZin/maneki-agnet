@@ -602,103 +602,87 @@ def _get_stock_name(code: str) -> str:
 WIKI_PATH = Path(__file__).resolve().parent.parent / "wiki"
 
 def _query_wiki(text: str) -> str | None:
-    """从 wiki 知识库查找匹配内容（关键词映射 + 文件搜索兜底）"""
-    # 关键词 → wiki 页面映射
-    wiki_map = {
-        "AUC": "评估指标说明.md",
-        "auc": "评估指标说明.md",
-        "涨停均排": "评估指标说明.md",
-        "均排": "评估指标说明.md",
-        "信号池": "评估指标说明.md",
-        "分差": "评估指标说明.md",
-        "覆盖率": "评估指标说明.md",
-        "命中率": "评估指标说明.md",
-        "鉴别力": "评估指标说明.md",
-        "综合分": "评估指标说明.md",
-        "composite": "评估指标说明.md",
-        "加权Top3": "五维度评分体系.md",
-        "Top3择优": "五维度评分体系.md",
-        "加权平均": "五维度评分体系.md",
-        "评分体系": "五维度评分体系.md",
-        "五个维度": "五维度评分体系.md",
-        "星级": "五维度评分体系.md",
-        "综合评级": "五维度评分体系.md",
-        "阈值": "扫描与推送机制.md",
-        "推送规则": "扫描与推送机制.md",
-        "扫描": "扫描与推送机制.md",
-        "盘中": "扫描与推送机制.md",
-        "收盘复盘": "扫描与推送机制.md",
-        "复盘": "扫描与推送机制.md",
-        "数据源": "数据源说明.md",
-        "东财": "数据源说明.md",
-        "东方财富": "数据源说明.md",
-        "Tushare": "数据源说明.md",
-        "tushare": "数据源说明.md",
-        "代理": "数据源说明.md",
-        "权重优化": "权重优化引擎.md",
-        "优化引擎": "权重优化引擎.md",
-        "optimize": "权重优化引擎.md",
-        "维度贡献": "权重优化引擎.md",
-        "校准曲线": "权重优化引擎.md",
-        "什么是": "评估指标说明.md",
-        "怎么算": "评估指标说明.md",
-        "什么意思": "评估指标说明.md",
-        "如何计算": "评估指标说明.md",
-        "基本面": "五维度评分体系.md",
-        "技术面": "五维度评分体系.md",
-        "资金面": "五维度评分体系.md",
-        "情绪面": "五维度评分体系.md",
-        "短线博弈": "五维度评分体系.md",
-        "否决": "子策略说明.md",
-        "熔断": "子策略说明.md",
-        "封板": "子策略说明.md",
-        "连板": "子策略说明.md",
-        "龙虎榜": "子策略说明.md",
-        "竞价": "子策略说明.md",
-        "AB对比": "AB对比机制.md",
-        "AB双跑": "AB对比机制.md",
-    }
+    """从 wiki 知识库查找匹配内容，AI 合成回答"""
+    try:
+        import subprocess
 
-    # 找匹配的 wiki 页面
-    matched_pages = set()
-    for kw, page in wiki_map.items():
-        if kw in text:
-            matched_pages.add(page)
-
-    # 如果关键词没匹配到，尝试文件搜索兜底
-    if not matched_pages:
-        try:
-            import subprocess
+        # 搜索 concepts/ + entities/ + queries/ 下的所有 .md 文件
+        grep_dirs = [
+            str(WIKI_PATH / "concepts"),
+            str(WIKI_PATH / "entities"),
+            str(WIKI_PATH / "queries"),
+        ]
+        matched_files = set()
+        for d in grep_dirs:
             result = subprocess.run(
-                ["grep", "-rli", text, str(WIKI_PATH / "concepts")],
-                capture_output=True, text=True, timeout=3
+                ["grep", "-rli", text, d],
+                capture_output=True, text=True, timeout=5
             )
             if result.stdout.strip():
-                matched_pages = set(
-                    Path(p).name for p in result.stdout.strip().split("\n")
-                )
-        except Exception:
-            pass
+                for p in result.stdout.strip().split("\n"):
+                    p = p.strip()
+                    if p:
+                        matched_files.add(p)
 
-    if not matched_pages:
+        if not matched_files:
+            return None
+
+        # 读取匹配文件内容（取前 80 行）
+        contexts = []
+        for fp in sorted(matched_files)[:3]:
+            fpath = Path(fp)
+            if fpath.exists():
+                content = fpath.read_text(encoding="utf-8")
+                parts = content.split("---", 2)
+                body = parts[2].strip() if len(parts) >= 3 else content
+                lines = body.split("\n")
+                contexts.append(f"--- {fpath.name} ---\n" + "\n".join(lines[:80]))
+
+        if not contexts:
+            return None
+
+        wiki_context = "\n\n".join(contexts)
+
+        # 用 DeepSeek 合成回答
+        import requests as _requests
+        import yaml as _yaml
+
+        with open("/root/.hermes/config.yaml") as _f:
+            _cfg = _yaml.safe_load(_f)
+        _mc = _cfg.get("model", {})
+        _api_key = _mc.get("api_key", "")
+
+        prompt = f"""你是一个A股分析助手，以下是用户的问题和知识库中的相关内容。
+
+用户问题: {text}
+
+知识库内容:
+{wiki_context}
+
+请根据知识库内容回答用户的问题。要求：
+1. 用简洁易懂的语言回答
+2. 如果知识库中有相关数据（如推送记录、评分等），直接引用
+3. 如果知识库中没有相关信息，请说明不知道
+4. 回答控制在 150 字以内"""
+
+        resp = _requests.post(
+            f"{_mc.get('base_url', 'https://api.deepseek.com')}/chat/completions",
+            headers={"Authorization": f"Bearer {_api_key}", "Content-Type": "application/json"},
+            json={
+                "model": _mc.get("default", "deepseek-v4-flash"),
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 300,
+                "temperature": 0.5,
+            },
+            timeout=15,
+        )
+        data = resp.json()
+        answer = data["choices"][0]["message"]["content"].strip()
+        return answer
+
+    except Exception as e:
+        print(f"  [wiki] 查询失败: {e}")
         return None
-
-    # 读取匹配的页面内容
-    answers = []
-    for page in sorted(matched_pages)[:2]:
-        page_path = WIKI_PATH / "concepts" / page
-        if page_path.exists():
-            content = page_path.read_text(encoding="utf-8")
-            parts = content.split("---", 2)
-            body = parts[2].strip() if len(parts) >= 3 else content
-            lines = body.split("\n")
-            body_preview = "\n".join(lines[:60])
-            answers.append(body_preview)
-
-    if not answers:
-        return None
-
-    return "\n\n---\n\n".join(answers)
 
 
 # ── 主入口 ────────────────────────────────────────────────
