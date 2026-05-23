@@ -43,7 +43,6 @@ def score_fundamental(code):
     V1.5变更（基于V1.0）：
     - 否决规则增加行业豁免（医药/电子商誉豁免、地产/建筑/非银/公用负债率豁免）
     - 否决规则增加困境反转豁免（单季扣非>0且去年同期<0免于连续亏损否决）
-    - 否决规则新增研发费用资本化率否决（>30%+现金流<净利润×0.5）
     - 股东筹码维度重构：大宗溢价+解禁冲击+连板基因
     - 估值维度重构：废除低PE加分，改为分析师上调+困境反转+远期PEG
     - 新增非线性共振加分（条件A/B取最高）
@@ -66,7 +65,7 @@ def score_fundamental(code):
     
     # 获取fina_indicator (盈利+财务) - 取最近2期以覆盖年报
     try:
-        resp = call_tushare("fina_indicator", token, {"ts_code": code}, "ann_date,end_date,roe,roe_dt,dt_netprofit_yoy,or_yoy,op_yoy,debt_to_assets,current_ratio,ocfps,bps")
+        resp = call_tushare("fina_indicator", token, {"ts_code": code}, "ann_date,end_date,roe,roe_dt,dt_netprofit_yoy,n_income,dt_netprofit,or_yoy,op_yoy,debt_to_assets,current_ratio,ocfps,bps")
         fina_data = resp.get("data", {})
         _fina_fields = fina_data.get("fields", [])
         _fina_items = fina_data.get("items", [])
@@ -154,7 +153,7 @@ def score_fundamental(code):
     
     # V1.5: 商誉/净资产 > 30% 且 ROE < 10%（医药/电子行业ROE>10%暂免）
     if bs_latest.get('goodwill') and bs_latest.get('total_hldr_eqy_exc_min_int'):
-        goodwill_ratio = float(bs_latest['goodwill']) / float(bs_latest['total_hldr_eqy_exc_min_int']) * 100
+        goodwill_ratio = safe_float(bs_latest['goodwill']) / safe_float(bs_latest['total_hldr_eqy_exc_min_int']) * 100
         if goodwill_ratio > 30:
             # 行业豁免：医药/电子行业ROE>10%免于否决
             pharma_and_elec = any(kw in industry_name for kw in ["医药", "医疗", "电子", "半导体", "元器件"])
@@ -169,7 +168,7 @@ def score_fundamental(code):
     debt_exempt_industries = ["房地产", "建筑", "非银金融", "公用事业", "银行", "综合"]
     is_debt_exempt = any(kw in industry_name for kw in debt_exempt_industries)
     if fina_latest.get('debt_to_assets'):
-        debt_ratio = float(fina_latest['debt_to_assets'])
+        debt_ratio = safe_safe_float(fina_latest.get('debt_to_assets'))
         if debt_ratio > 70:
             ocfps_latest = safe_float(fina_latest.get('ocfps'))
             ocfps_annual = safe_float(fina_annual.get('ocfps')) if fina_annual else None
@@ -187,43 +186,42 @@ def score_fundamental(code):
                         is_vetoed = True
                         risk_flags.append(f"负债率{debt_ratio:.0f}%>70%且经营现金流为负")
     
-    # V1.5: 扣非净利润连续3年亏损 + 困境反转豁免
-    # 检查是否连续亏损（简单代理：最新扣非净利为负）
+    # V1.5: 扣非净利润连续3年亏损 + 困境反转豁免（用扣非净利润判断）
     is_consecutive_loss = False
     if fina_latest.get('dt_netprofit_yoy'):
-        profit_yoy = float(fina_latest['dt_netprofit_yoy'])
-        if profit_yoy < -50:  # 大幅下降视为连续亏损
+        profit_yoy = safe_safe_float(fina_latest.get('dt_netprofit_yoy'))
+        if profit_yoy is not None and profit_yoy < -50:
             is_consecutive_loss = True
     
-    # 困境反转检查：最新单季扣非>0且去年同期<0 → 豁免
+    # 困境反转检查：最新扣非>0且去年同期扣非<0 → 豁免（防假反转）
     is_turnaround = False
-    if inc_latest.get('n_income') and inc_prev.get('n_income'):
-        try:
-            latest_ni = float(inc_latest['n_income'])
-            prev_ni = float(inc_prev['n_income'])
-            if latest_ni > 0 and prev_ni < 0:
-                is_turnaround = True
-        except:
-            pass
+    if fina_latest.get('n_income') and fina_latest.get('dt_netprofit'):
+        latest_ni = safe_float(fina_latest['n_income'])
+        latest_dt = safe_float(fina_latest['dt_netprofit'])
+        if latest_ni is not None and latest_dt is not None and latest_ni > 0 and latest_dt > 0:
+            # 需要至少两期数据判断"去年亏损"
+            if fina_annual.get('dt_netprofit'):
+                prev_dt = safe_float(fina_annual['dt_netprofit'])
+                if prev_dt is not None and prev_dt < 0:
+                    is_turnaround = True
     
     if is_consecutive_loss and not is_turnaround:
         is_vetoed = True
         risk_flags.append("扣非净利润连续亏损(无困境反转)")
     
-    # 非经常性损益占比 > 20%
-    if inc_latest.get('n_income') and inc_latest['n_income'] != 0:
-        non_op = (float(inc_latest.get('non_oper_income') or 0) - float(inc_latest.get('non_oper_exp') or 0))
-        non_op_ratio = abs(non_op / float(inc_latest['n_income'])) * 100
-        if non_op_ratio > 20:
-            is_vetoed = True
-            risk_flags.append(f"非经常性损益占比{non_op_ratio:.0f}%>20%")
+    # 非经常性损益占比 > 50%（用净利润-扣非净利润计算，非营业外收支）
+    if fina_latest.get('n_income') and fina_latest.get('dt_netprofit'):
+        n_income = safe_float(fina_latest['n_income'])
+        dt_netprofit = safe_float(fina_latest['dt_netprofit'])
+        if n_income is not None and dt_netprofit is not None and n_income != 0:
+            non_recurring = n_income - dt_netprofit
+            non_op_ratio = abs(non_recurring / n_income) * 100
+            if non_op_ratio > 50:
+                is_vetoed = True
+                risk_flags.append(f"非经常性损益占比{non_op_ratio:.0f}%>50%")
     
-    # 主业营收占比 < 50%
-    if inc_latest.get('total_revenue') and inc_latest.get('revenue'):
-        main_biz_ratio = float(inc_latest['revenue']) / float(inc_latest['total_revenue']) * 100
-        if main_biz_ratio < 50:
-            is_vetoed = True
-            risk_flags.append(f"主业营收占比{main_biz_ratio:.0f}%<50%")
+    # 主业营收占比：废弃（Tushare income表revenue≈total_revenue, 恒≈100%）
+    # 经营活动现金流健康度由负债率否决一并覆盖
     
     # 近6个月内存在 > 流通盘10% 的大额解禁
     try:
@@ -309,7 +307,7 @@ def score_fundamental(code):
     
     # 扣非净利润同比
     if fina_latest.get('dt_netprofit_yoy'):
-        profit_yoy = float(fina_latest['dt_netprofit_yoy'])
+        profit_yoy = safe_float(fina_latest.get('dt_netprofit_yoy'))
         if profit_yoy > 50:
             profit_score += 0.25
             profit_reasons.append(f"扣非净利+{profit_yoy:.0f}%")
@@ -322,7 +320,7 @@ def score_fundamental(code):
     
     # 营收增速
     if fina_latest.get('or_yoy'):
-        rev_yoy = float(fina_latest['or_yoy'])
+        rev_yoy = safe_float(fina_latest.get('or_yoy'))
         if rev_yoy > 30:
             profit_score += 0.15
             profit_reasons.append(f"营收+{rev_yoy:.0f}%")
@@ -374,8 +372,8 @@ def score_fundamental(code):
     # 股东户数环比下降（仅做底仓过滤，不直接加分）
     if holder_latest.get('holder_num') and holder_prev.get('holder_num'):
         try:
-            holder_now = float(holder_latest['holder_num'])
-            holder_before = float(holder_prev['holder_num'])
+            holder_now = safe_float(holder_latest.get('holder_num'))
+            holder_before = safe_float(holder_prev.get('holder_num'))
             holder_chg = (holder_before - holder_now) / holder_before
             if holder_chg >= 0.05:
                 chip_score += 0.20
@@ -436,7 +434,7 @@ def score_fundamental(code):
     
     # 负债率风险扣分（未触发否决则在此扣分）
     if fina_latest.get('debt_to_assets'):
-        debt_ratio = float(fina_latest['debt_to_assets'])
+        debt_ratio = safe_float(fina_latest.get('debt_to_assets'))
         if debt_ratio > 60:
             finance_score -= 0.20
             finance_reasons.append(f"负债率{debt_ratio:.0f}%")
@@ -445,7 +443,7 @@ def score_fundamental(code):
     
     # 流动比率
     if fina_latest.get('current_ratio'):
-        current_ratio = float(fina_latest['current_ratio'])
+        current_ratio = safe_float(fina_latest.get('current_ratio'))
         if current_ratio and current_ratio < 1:
             finance_score -= 0.20
             finance_reasons.append("流动性风险")
