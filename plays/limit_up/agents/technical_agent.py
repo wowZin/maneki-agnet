@@ -9,6 +9,10 @@ sys.path.insert(0, str(PROJECT_DIR / "scripts"))
 
 from plays.limit_up.pipeline import CONFIG, call_tushare, safe_float_none, is_trading_time, _get_realtime_fund_cache, get_industry, get_industry_peers
 
+# 模块级缓存：行业 → {code: {close, ma_bfq_20}}
+# 单次扫描中多个候选股同行业时避重复API调用
+_INDUSTRY_MA20_CACHE = {}
+
 
 def score_technical(code):
     """
@@ -442,22 +446,32 @@ def score_technical(code):
             if ind_codes and len(ind_codes) > 1:
                 above_ma20_count = 0
                 total_count = 0
+                # 行业MA20数据缓存：单次扫描内同行业不重复请求
+                if industry not in _INDUSTRY_MA20_CACHE:
+                    _INDUSTRY_MA20_CACHE[industry] = {}
+                    for ind_code in ind_codes:
+                        if not ind_code:
+                            continue
+                        try:
+                            resp_daily = call_tushare("stk_factor_pro", token, {"ts_code": ind_code}, "trade_date,close,ma_bfq_20")
+                            d_items = resp_daily.get("data", {}).get("items", [])
+                            if d_items:
+                                d_fields = resp_daily.get("data", {}).get("fields", [])
+                                d_dict = dict(zip(d_fields, d_items[0])) if d_fields else {}
+                                _INDUSTRY_MA20_CACHE[industry][ind_code] = {
+                                    "close": safe_float(d_dict.get('close')),
+                                    "ma20": safe_float(d_dict.get('ma_bfq_20')),
+                                }
+                        except:
+                            pass
+                # 从缓存读取
                 for ind_code in ind_codes:
                     if not ind_code:
                         continue
                     total_count += 1
-                    try:
-                        resp_daily = call_tushare("stk_factor_pro", token, {"ts_code": ind_code}, "trade_date,close,ma_bfq_20")
-                        d_items = resp_daily.get("data", {}).get("items", [])
-                        if d_items:
-                            d_fields = resp_daily.get("data", {}).get("fields", [])
-                            d_dict = dict(zip(d_fields, d_items[0])) if d_fields else {}
-                            d_close = safe_float(d_dict.get('close'))
-                            d_ma20 = safe_float(d_dict.get('ma_bfq_20'))
-                            if d_close and d_ma20 and d_close > d_ma20:
-                                above_ma20_count += 1
-                    except:
-                        pass
+                    d = _INDUSTRY_MA20_CACHE[industry].get(ind_code)
+                    if d and d.get("close") and d.get("ma20") and d["close"] > d["ma20"]:
+                        above_ma20_count += 1
                 if total_count > 0:
                     sector_above_ma20_ratio = above_ma20_count / total_count
 
