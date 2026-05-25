@@ -30,11 +30,11 @@ import requests
 # 直接从.env读取
 TUSHARE_TOKEN = ""
 CURRENT_WEIGHTS = {
-    "fundamental": 1.5,
-    "technical": 1.0,
-    "fundflow": 0.5,
-    "sentiment": 1.2,
-    "shortterm": 1.5,
+    "fundamental": 0.6,
+    "technical": 1.9,
+    "fundflow": 2.0,
+    "sentiment": 1.1,
+    "shortterm": 1.0,
 }
 if (PROJECT_DIR / ".env").exists():
     with open(PROJECT_DIR / ".env") as f:
