@@ -238,37 +238,18 @@ def get_daily_close_data(today: str) -> dict:
         print(f"获取日线数据失败: {e}")
     return {}
 
-def build_signal_pct_map(signals: list) -> dict:
+def calculate_win_rate(pushed_analysis: list, daily_close_data: dict) -> dict:
     """
-    从信号数据构建股票代码→扫描时涨幅%的映射（去重，取首次出现）。
-    返回 {ts_code: scan_pct}
-    """
-    pct_map = {}
-    for s in signals:
-        code = s.get("代码") or s.get("code") or s.get("ts_code", "")
-        if not code:
-            continue
-        code_str = str(code).zfill(6) if "." not in str(code) else str(code).split(".")[0]
-        if code_str.startswith("6"):
-            ts_code = f"{code_str}.SH"
-        else:
-            ts_code = f"{code_str}.SZ"
-        if ts_code not in pct_map:
-            pct_map[ts_code] = safe_float(s.get("涨幅%", 0))
-    return pct_map
-
-def calculate_win_rate(pushed_analysis: list, signal_pct_map: dict, daily_close_data: dict) -> dict:
-    """
-    计算胜率：推送股票中，收盘涨幅 > 扫描时涨幅（即推送后继续上涨）的比例。
-    只统计推送过的股票，去重。
+    计算胜率：推送股票中，收盘涨幅 > 推送时涨幅的比例。
+    推送时涨幅从 pushed JSON 的 pct_chg 字段读取（pipeline 扫描时记录）。
     """
     win_count = 0
     total = 0
     for item in pushed_analysis:
         code = item.get("code", "")
-        scan_pct = signal_pct_map.get(code)
+        scan_pct = item.get("pct_chg", 0)
         close_info = daily_close_data.get(code)
-        if scan_pct is not None and close_info:
+        if scan_pct != 0 and close_info:
             close_pct = close_info.get("pct_chg", 0)
             if close_pct > scan_pct:
                 win_count += 1
@@ -331,9 +312,9 @@ def get_today_limit_up(today: str) -> list:
                 if code.startswith('300') or code.startswith('688') or code.startswith('8') or code.startswith('4'):
                     continue
                 
-                # 过滤2: 排除ST/*ST（与pipeline规则1一致）
+                # 过滤2: 排除ST/*ST/新股(与pipeline规则一致)
                 name = name_map.get(code, '')
-                if 'ST' in name:
+                if 'ST' in name or name.startswith('N'):
                     continue
                 
                 # 主板非ST涨停阈值9.9%
@@ -371,9 +352,9 @@ def get_today_limit_up(today: str) -> list:
                     # 同样过滤创业板/科创板/北交所
                     if code.startswith('300') or code.startswith('688') or code.startswith('8') or code.startswith('4'):
                         continue
-                    # 同样过滤ST
+                    # 同样过滤ST/新股
                     name = name_map.get(code, '')
-                    if 'ST' in name:
+                    if 'ST' in name or name.startswith('N'):
                         continue
                     result.append(code)
                 if result:
@@ -470,13 +451,16 @@ def confidence_distribution(analysis_results: list) -> dict:
     return dist
 
 # ===== 8. 权重AB对比 =====
-def compute_ab_comparison(all_analysis: list, limit_ups: list) -> dict:
-    """用新旧两套权重分别计算推送池并对比命中率（纯数学，零API）"""
+def compute_ab_comparison(pushed_analysis: list, all_analysis: list, limit_ups: list) -> dict:
+    """比较新旧两套权重在实际推送股票上的命中差异
+
+    - 新权重：直接用实际推送记录（pushed_analysis），反映当日真实结果
+    - 旧权重：用旧权重从全量分析中重建推送池（模拟如果旧权重仍在用会推哪些）
+    """
     if not AB_ENABLED:
         return {"enabled": False, "note": "当前权重与旧权重相同，AB不生效"}
 
     def weighted_top3_total(scores, weights):
-        """加权Top3择优：按加权贡献取前3维的加权均值"""
         dims = ['fundamental', 'technical', 'fundflow', 'sentiment', 'shortterm']
         contribs = [(scores.get(d, 0) or 0, weights.get(d, 1.0)) for d in dims]
         contribs.sort(key=lambda x: x[0] * x[1], reverse=True)
@@ -486,28 +470,21 @@ def compute_ab_comparison(all_analysis: list, limit_ups: list) -> dict:
         return total_s / total_w if total_w > 0 else 0
 
     THRESHOLD = 35
+    actual_set = set(limit_ups)
 
-    # 旧权重推送
+    # 新权重：实际推送记录（真实结果）
+    curr_codes = set(item.get("code", "") for item in pushed_analysis)
+    curr_hits = curr_codes & actual_set
+
+    # 旧权重：从全量分析重建（模拟）
     for item in all_analysis:
         s = item.get("scores", {})
         if s:
             item["_prev_total"] = weighted_top3_total(s, PREV_WEIGHTS)
     prev_candidates = [item for item in all_analysis if item.get("_prev_total", 0) >= THRESHOLD]
     prev_candidates.sort(key=lambda x: x.get("_prev_total", 0), reverse=True)
-    prev_pushed = prev_candidates[:3]
-
-    # 新权重推送
-    for item in all_analysis:
-        s = item.get("scores", {})
-        if s:
-            item["_curr_total"] = weighted_top3_total(s, CURRENT_WEIGHTS)
-    curr_candidates = [item for item in all_analysis if item.get("_curr_total", 0) >= THRESHOLD]
-    curr_candidates.sort(key=lambda x: x.get("_curr_total", 0), reverse=True)
-    curr_pushed = curr_candidates[:3]
-
-    actual_set = set(limit_ups)
-    prev_codes = set(p.get("code", "") for p in prev_pushed)
-    curr_codes = set(p.get("code", "") for p in curr_pushed)
+    prev_codes = set(p.get("code", "") for p in prev_candidates[:3])
+    prev_hits = prev_codes & actual_set
 
     return {
         "enabled": True,
@@ -515,13 +492,13 @@ def compute_ab_comparison(all_analysis: list, limit_ups: list) -> dict:
             "weights": PREV_WEIGHTS,
             "pushed": len(prev_codes),
             "codes": list(prev_codes),
-            "hits": len(prev_codes & actual_set),
+            "hits": len(prev_hits),
         },
         "curr": {
             "weights": CURRENT_WEIGHTS,
             "pushed": len(curr_codes),
             "codes": list(curr_codes),
-            "hits": len(curr_codes & actual_set),
+            "hits": len(curr_hits),
         },
     }
 
@@ -774,7 +751,7 @@ def main():
     daily_close_data = get_daily_close_data(today)
 
     # 构建信号涨幅映射（用于胜率计算）
-    signal_pct_map = build_signal_pct_map(signals)
+    # 信号→扫描涨幅映射（deprecated: 改用推送记录的pct_chg字段，保留兼容）
     
     # Step 5: 计算命中（以推送数据为预测池）
     pushed_codes = set()
@@ -815,7 +792,7 @@ def main():
         r["hit"] = code in hit_codes
 
     # Step 6: 计算胜率（基于推送股票）
-    win_rate_info = calculate_win_rate(pushed_analysis, signal_pct_map, daily_close_data)
+    win_rate_info = calculate_win_rate(pushed_analysis, daily_close_data)
     print(f"胜率: {win_rate_info['win_count']}/{win_rate_info['total']} = {win_rate_info['win_rate']:.1f}%")
 
     # Step 7: 各维度表现（基于推送股票，而非全量分析）
@@ -825,7 +802,7 @@ def main():
     conf_dist = confidence_distribution(pushed_analysis)
 
     # Step 9: 权重AB对比（全量分析 vs 涨停名单）
-    ab_result = compute_ab_comparison(all_analysis, limit_ups)
+    ab_result = compute_ab_comparison(pushed_analysis, all_analysis, limit_ups)
     if ab_result.get("enabled"):
         prev_hit_rate = ab_result["prev"]["hits"] / ab_result["prev"]["pushed"] * 100 if ab_result["prev"]["pushed"] else 0
         curr_hit_rate = ab_result["curr"]["hits"] / ab_result["curr"]["pushed"] * 100 if ab_result["curr"]["pushed"] else 0

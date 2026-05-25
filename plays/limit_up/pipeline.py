@@ -229,7 +229,7 @@ def scan_surge():
                 continue
             if "." not in code:
                 code = f"{code}.SH" if code.startswith("6") else f"{code}.SZ"
-            candidates.append({"code": code, "name": name})
+            candidates.append({"code": code, "name": name, "pct_chg": pct})
         return candidates
     
     for attempt in range(3):
@@ -852,6 +852,29 @@ def main():
         s_reason = reasons.get("sentiment", "")
         st_reason = reasons.get("shortterm", "")
         
+        # 加载权重（支持从.env覆写）
+        weights = {
+            "fundamental": 1.5,
+            "technical": 1.0,
+            "fundflow": 0.5,
+            "sentiment": 1.2,
+            "shortterm": 1.5,
+        }
+        if (PROJECT_DIR / ".env").exists():
+            with open(PROJECT_DIR / ".env") as _wf:
+                for _wl in _wf:
+                    _wl = _wl.strip()
+                    if _wl.startswith("AGENT_WEIGHT_FUNDAMENTAL="):
+                        weights["fundamental"] = float(_wl.split("=", 1)[1].strip())
+                    elif _wl.startswith("AGENT_WEIGHT_TECHNICAL="):
+                        weights["technical"] = float(_wl.split("=", 1)[1].strip())
+                    elif _wl.startswith("AGENT_WEIGHT_FUND_FLOW="):
+                        weights["fundflow"] = float(_wl.split("=", 1)[1].strip())
+                    elif _wl.startswith("AGENT_WEIGHT_SENTIMENT="):
+                        weights["sentiment"] = float(_wl.split("=", 1)[1].strip())
+                    elif _wl.startswith("AGENT_WEIGHT_SHORTTERM="):
+                        weights["shortterm"] = float(_wl.split("=", 1)[1].strip())
+        
         # V2.6: 加权Top3择优（按加权贡献选前3维，取加权均值）
         # 让权重真正影响哪3个维度进Top3以及贡献大小
         dim_contribs = [
@@ -904,6 +927,7 @@ def main():
                 "is_resonance": resonance_flag
             },
             "top3_score": round(total, 1),  # V2.6: 等同总分(加权Top3择优)
+            "pct_chg": round(stock.get("pct_chg", 0), 1),
         })
     
     # 排序（全按总分排序，总分=Top3均值）
