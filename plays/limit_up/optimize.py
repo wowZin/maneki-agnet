@@ -106,8 +106,8 @@ def load_analysis(days: int = 30) -> list[dict]:
             code = item.get("code", "").split(".")[0]
             if not code or code == "None":
                 continue
-            # 排除创业板/科创板
-            if code.startswith(("300", "301", "688", "8")):
+            # 排除创业板/科创板/北交所
+            if code.startswith(("300", "301", "688", "8", "4")):
                 continue
             records.append({
                 "trade_date": trade_date,
@@ -141,7 +141,28 @@ def load_analysis(days: int = 30) -> list[dict]:
 # ═══════════════════════════════════════════
 
 def fetch_limit_ups(dates: list[str]) -> set[tuple[str, str]]:
-    """从 tushare 拉取涨停数据，返回 {(date, code)}"""
+    """从 tushare 拉取涨停数据，返回 {(date, code)}
+    
+    过滤规则与 pipeline 一致：
+    - 排除创业板(300/301)/科创板(688)/北交所(8/4)
+    - 排除 ST/*ST/新股(N开头)
+    """
+    # 先拉 stock_basic 获取名称（用于 ST/新股过滤）
+    name_map = {}
+    try:
+        resp = requests.post("http://api.tushare.pro", json={
+            "api_name": "stock_basic",
+            "token": TUSHARE_TOKEN,
+            "params": {"list_status": "L"},
+            "fields": "ts_code,name"
+        }, timeout=15)
+        data = resp.json()
+        if data.get("code") == 0 and data.get("data"):
+            for item in data["data"]["items"]:
+                name_map[item[0]] = item[1]
+    except Exception:
+        pass
+
     limit_ups = set()
     for date in dates:
         try:
@@ -149,6 +170,7 @@ def fetch_limit_ups(dates: list[str]) -> set[tuple[str, str]]:
                 "api_name": "limit_list_d",
                 "token": TUSHARE_TOKEN,
                 "params": {"trade_date": date, "limit_type": "U"},
+                "fields": "ts_code,name",
             }
             resp = requests.post("http://api.tushare.pro", json=payload, timeout=30)
             data = resp.json()
@@ -156,7 +178,15 @@ def fetch_limit_ups(dates: list[str]) -> set[tuple[str, str]]:
                 fields = data["data"]["fields"]
                 idx = {f: i for i, f in enumerate(fields)}
                 for item in data["data"]["items"]:
-                    code = item[idx.get("ts_code", 0)].split(".")[0]
+                    code_full = item[idx.get("ts_code", 0)]
+                    code = code_full.split(".")[0]
+                    name = item[idx.get("name", 0)] if "name" in idx else name_map.get(code_full, "")
+                    # 过滤1: 创业板/科创板/北交所
+                    if code.startswith(("300", "301", "688", "8", "4")):
+                        continue
+                    # 过滤2: ST/*ST/新股
+                    if "ST" in name or name.startswith("N"):
+                        continue
                     limit_ups.add((date, code))
                 print(f"  {date}: +{len(limit_ups)} 只涨停（累计）")
         except Exception as e:
