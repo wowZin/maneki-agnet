@@ -704,7 +704,7 @@ def push_feishu(results):
             "text": {
                 "tag": "lark_md",
                 "content": f"**{r['code']} {r['name']}** {stars}\n"
-                          f"综合评级:{r['total']:.1f}  基本面:{s.get('fundamental',0):.0f} 技术面:{s.get('technical',0):.0f} 资金面:{s.get('fundflow',0):.0f} 情绪面:{s.get('sentiment',0):.0f} 短线:{s.get('shortterm',0):.0f}"
+                          f"综合评分:{r['total']:.1f}  基本面:{s.get('fundamental',0):.0f} 技术面:{s.get('technical',0):.0f} 资金面:{s.get('fundflow',0):.0f} 情绪面:{s.get('sentiment',0):.0f} 短线:{s.get('shortterm',0):.0f}"
             }
         }
         card["elements"].append(element)
