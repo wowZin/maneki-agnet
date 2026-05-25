@@ -3,12 +3,12 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 sys.path.insert(0, str(PROJECT_DIR / "scripts"))
-from plays.limit_up.pipeline import CONFIG, call_tushare, is_trading_time, list_to_dict, safe_float_none, safe_int_none
+from plays.limit_up.pipeline import CONFIG, call_tushare, is_trading_time, list_to_dict, safe_float, safe_float_none, safe_int_none
 import requests
 from datetime import datetime
 
 # 工具函数别名
-safe_float = safe_float_none
+# safe_float = safe_float_none  -- 不别名：safe_float返回0.0（避免None比较崩溃），需要None的用safe_float_none
 safe_int = safe_int_none
 
 def score_fundflow(code):

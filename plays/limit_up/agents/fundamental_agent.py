@@ -168,7 +168,7 @@ def score_fundamental(code):
     debt_exempt_industries = ["房地产", "建筑", "非银金融", "公用事业", "银行", "综合"]
     is_debt_exempt = any(kw in industry_name for kw in debt_exempt_industries)
     if fina_latest.get('debt_to_assets'):
-        debt_ratio = safe_safe_float(fina_latest.get('debt_to_assets'))
+        debt_ratio = safe_float(fina_latest.get('debt_to_assets'))
         if debt_ratio > 70:
             ocfps_latest = safe_float(fina_latest.get('ocfps'))
             ocfps_annual = safe_float(fina_annual.get('ocfps')) if fina_annual else None
@@ -189,7 +189,7 @@ def score_fundamental(code):
     # V1.5: 扣非净利润连续3年亏损 + 困境反转豁免（用扣非净利润判断）
     is_consecutive_loss = False
     if fina_latest.get('dt_netprofit_yoy'):
-        profit_yoy = safe_safe_float(fina_latest.get('dt_netprofit_yoy'))
+        profit_yoy = safe_float(fina_latest.get('dt_netprofit_yoy'))
         if profit_yoy is not None and profit_yoy < -50:
             is_consecutive_loss = True
     
