@@ -358,7 +358,7 @@ def _get_realtime_quote(code: str) -> dict:
             print(f"  [盘中行情] {code} 失败: {e}")
         return {"price": 0, "change_pct": 0}
 
-    # 盘后：Tushare daily
+    # 盘后：Tushare daily（T+1数据有延迟取最近交易日）
     try:
         import os as _os
         import tushare as _ts
@@ -368,6 +368,7 @@ def _get_realtime_quote(code: str) -> dict:
         _ts.set_token(_os.getenv("TUSHARE_TOKEN", ""))
         pro = _ts.pro_api()
 
+        # 先找到最近一个交易日（Tushare daily T+1更新，可能查不到今天）
         trade_date = None
         for i in range(10):
             check = (datetime.now() - timedelta(days=i)).strftime("%Y%m%d")
@@ -379,17 +380,19 @@ def _get_realtime_quote(code: str) -> dict:
         if not trade_date:
             return {"price": 0, "change_pct": 0}
 
-        df = pro.daily(ts_code=code, start_date=trade_date,
-                      end_date=trade_date,
-                      fields="trade_date,close,pct_chg")
-        if df is not None and len(df) > 0:
-            row = df.iloc[0]
-            return {"price": float(row["close"]), "change_pct": float(row["pct_chg"])}
+        # Tushare daily 数据 T+1 更新，若今日数据未就绪则回退到上一个交易日
+        for offset in range(5):
+            d = (datetime.strptime(trade_date, "%Y%m%d") - timedelta(days=offset)).strftime("%Y%m%d")
+            df = pro.daily(ts_code=code, start_date=d, end_date=d,
+                          fields="trade_date,close,pct_chg")
+            if df is not None and len(df) > 0:
+                row = df.iloc[0]
+                return {"price": float(row["close"]), "change_pct": float(row["pct_chg"])}
+
+        return {"price": 0, "change_pct": 0}
     except Exception as e:
         print(f"  [Tushare daily] {code} 失败: {e}")
-
-    return {"price": 0, "change_pct": 0}
-
+        return {"price": 0, "change_pct": 0}
 
 # ── 积极信号总结 ──────────────────────────────────────────
 
