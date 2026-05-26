@@ -324,41 +324,54 @@ def _score_one_stock(code: str) -> dict:
     return {"code": code, "scores": scores, "reasons": reasons, "total": round(total, 1)}
 
 
+# ── 市场状态判定 ──────────────────────────────────────────
+
+
+def _market_state() -> str:
+    """返回当前市场状态: 'trading' / 'closed' / 'weekend'"""
+    now = datetime.now()
+    if now.weekday() >= 5:
+        return "weekend"
+    h, m = now.hour, now.minute
+    if (h == 9 and m >= 30) or (10 <= h < 11) or (h == 11 and m < 30) or (13 <= h < 15):
+        return "trading"
+    return "closed"
+
+
 # ── 实时行情获取 ──────────────────────────────────────────
 
 
-def _get_realtime_quote(code: str) -> dict:
-    from plays.limit_up.pipeline import is_trading_time
-
+def _fetch_eastmoney(code: str) -> dict:
+    """从东方财富获取实时行情，返回 {price, change_pct} 或空dict"""
     raw = code.split(".")[0]
+    try:
+        import requests as _req
+        import sys as _sys
+        _sys.path.insert(0, str(SCRIPTS_DIR))
+        from proxy_utils import get_proxies_dict
+        from dotenv import load_dotenv
+        import os
 
-    if is_trading_time():
-        try:
-            import requests as _req
-            import sys as _sys
-            _sys.path.insert(0, str(SCRIPTS_DIR))
-            from proxy_utils import get_proxies_dict
-            from dotenv import load_dotenv
-            import os
+        load_dotenv(PROJECT_DIR / ".env")
+        proxies = get_proxies_dict() if os.getenv("PROXY_ENABLED", "").lower() == "true" else None
 
-            load_dotenv(PROJECT_DIR / ".env")
-            proxies = get_proxies_dict() if os.getenv("PROXY_ENABLED", "").lower() == "true" else None
+        market = "0" if raw.startswith(("00", "30", "8", "4")) else "1"
+        url = (f"https://push2.eastmoney.com/api/qt/stock/get?"
+               f"secid={market}.{raw}&fields=f43,f44,f45,f46,f47,f48,f49,"
+               f"f50,f51,f52,f53,f54,f55,f57,f58,f168,f170,f171,f292")
+        resp = _req.get(url, proxies=proxies, timeout=5)
+        d = resp.json().get("data", {})
+        price = d.get("f43", 0) or 0
+        pct = d.get("f170", 0) or 0
+        if price:
+            return {"price": float(price), "change_pct": float(pct)}
+    except Exception as e:
+        print(f"  [Eastmoney] {code} 失败: {e}")
+    return {}
 
-            market = "0" if raw.startswith(("00", "30")) else "1"
-            url = (f"https://push2.eastmoney.com/api/qt/stock/get?"
-                   f"secid={market}.{raw}&fields=f43,f44,f45,f46,f47,f48,f49,"
-                   f"f50,f51,f52,f53,f54,f55,f57,f58,f168,f170,f171,f292")
-            resp = _req.get(url, proxies=proxies, timeout=5)
-            d = resp.json().get("data", {})
-            price = d.get("f43", 0) or 0
-            pct = d.get("f170", 0) or 0
-            if price:
-                return {"price": float(price), "change_pct": float(pct)}
-        except Exception as e:
-            print(f"  [盘中行情] {code} 失败: {e}")
-        return {"price": 0, "change_pct": 0}
 
-    # 盘后：Tushare daily（T+1数据有延迟取最近交易日）
+def _fetch_tushare_daily(code: str) -> dict:
+    """从Tushare获取最近可用日线，自动回退到上一个有数据的交易日，返回 {price, change_pct} 或空dict"""
     try:
         import os as _os
         import tushare as _ts
@@ -368,31 +381,37 @@ def _get_realtime_quote(code: str) -> dict:
         _ts.set_token(_os.getenv("TUSHARE_TOKEN", ""))
         pro = _ts.pro_api()
 
-        # 先找到最近一个交易日（Tushare daily T+1更新，可能查不到今天）
-        trade_date = None
+        # 找到最近有全天数据的交易日（Tushare daily T+1更新，今天数据可能还没出）
         for i in range(10):
             check = (datetime.now() - timedelta(days=i)).strftime("%Y%m%d")
-            cal = pro.trade_cal(start_date=check, end_date=check)
-            if cal is not None and len(cal) > 0 and cal.iloc[0]["is_open"] == 1:
-                trade_date = check
-                break
-
-        if not trade_date:
-            return {"price": 0, "change_pct": 0}
-
-        # Tushare daily 数据 T+1 更新，若今日数据未就绪则回退到上一个交易日
-        for offset in range(5):
-            d = (datetime.strptime(trade_date, "%Y%m%d") - timedelta(days=offset)).strftime("%Y%m%d")
-            df = pro.daily(ts_code=code, start_date=d, end_date=d,
+            df = pro.daily(ts_code=code, start_date=check, end_date=check,
                           fields="trade_date,close,pct_chg")
             if df is not None and len(df) > 0:
                 row = df.iloc[0]
                 return {"price": float(row["close"]), "change_pct": float(row["pct_chg"])}
-
-        return {"price": 0, "change_pct": 0}
     except Exception as e:
         print(f"  [Tushare daily] {code} 失败: {e}")
+    return {}
+
+
+def _get_realtime_quote(code: str) -> dict:
+    """获取行情：盘中走东财实时，盘后走Tushare日线（自动回退最近交易日）"""
+    state = _market_state()
+    if state == "trading":
+        result = _fetch_eastmoney(code)
+        if result:
+            return result
+        # 东财失败时降级到Tushare（盘中Tushare只有T-1数据）
+        result = _fetch_tushare_daily(code)
+        if result:
+            return result
         return {"price": 0, "change_pct": 0}
+
+    # 盘后/周末：Tushare日线（自动回退到最近有数据的交易日）
+    result = _fetch_tushare_daily(code)
+    if result:
+        return result
+    return {"price": 0, "change_pct": 0}
 
 # ── 积极信号总结 ──────────────────────────────────────────
 
