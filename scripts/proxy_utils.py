@@ -27,6 +27,13 @@ load_dotenv(PROJECT_DIR / ".env")
 
 # === 代理IP服务配置 (从.env读取) ===
 PROXY_ENABLED = os.getenv("PROXY_ENABLED", "false").lower() in ("true", "1", "yes")
+# 隧道代理（优先）
+PROXY_TUNNEL_HOST = os.getenv("PROXY_TUNNEL_HOST", "")
+PROXY_TUNNEL_PORT = os.getenv("PROXY_TUNNEL_PORT", "")
+PROXY_TUNNEL_USER = os.getenv("PROXY_TUNNEL_USER", "")
+PROXY_TUNNEL_PASS = os.getenv("PROXY_TUNNEL_PASS", "")
+PROXY_TUNNEL_URL = f"http://{PROXY_TUNNEL_USER}:{PROXY_TUNNEL_PASS}@{PROXY_TUNNEL_HOST}:{PROXY_TUNNEL_PORT}" if PROXY_TUNNEL_HOST else ""
+# 动态API（备用）
 PROXY_API_URL = os.getenv("PROXY_API_URL", "http://s189.zdtps.com:8080/GetIP/")
 PROXY_INST_ID = os.getenv("PROXY_INST_ID", "")
 PROXY_AKEY = os.getenv("PROXY_AKEY", "")
@@ -117,6 +124,8 @@ def get_proxy_ip(force_refresh=False):
 def get_proxies_dict(proxy_addr=None):
     """返回requests/urllib可用的代理dict
 
+    优先使用隧道代理(PROXY_TUNNEL_HOST)，无则用动态API获取。
+
     Args:
         proxy_addr: "ip:port"格式，None则自动获取
     Returns: {"http": "http://user:pass@ip:port", "https": "http://user:pass@ip:port"} 或 None
@@ -124,6 +133,11 @@ def get_proxies_dict(proxy_addr=None):
     if not is_proxy_enabled():
         return None
 
+    # 隧道代理优先
+    if PROXY_TUNNEL_URL:
+        return {"http": PROXY_TUNNEL_URL, "https": PROXY_TUNNEL_URL}
+
+    # 动态API
     if proxy_addr is None:
         proxy_addr = get_proxy_ip()
     if proxy_addr is None:
