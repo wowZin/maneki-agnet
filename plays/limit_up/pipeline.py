@@ -202,18 +202,12 @@ def scan_surge():
         "ut=fa5fd1943c7b386f172d6893dbfba10b"
     )
     
-    def _fetch(fid, use_proxy=True):
+    def _fetch(fid):
         """单次API请求，返回过滤后的候选股列表"""
         url = f"{base_url}&fid={fid}"
-        try:
-            proxies = get_proxies_dict() if use_proxy else None
-            resp = requests.get(url, proxies=proxies, timeout=15)
-            data = resp.json()
-        except Exception:
-            if use_proxy:
-                # 代理失败降级直连
-                return _fetch(fid, use_proxy=False)
-            return []
+        proxies = get_proxies_dict()
+        resp = requests.get(url, proxies=proxies, timeout=15)
+        data = resp.json()
         items = data.get("data", {}).get("diff", [])
         if not items:
             return []
