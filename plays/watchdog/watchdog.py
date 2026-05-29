@@ -1,0 +1,477 @@
+"""
+盯盘助手 V1.0
+============
+基于l2api Level2实时数据 + 双引擎动量-均值回归策略，持续监控标的。
+通过飞书推送买卖信号，状态持久化到本地JSON。
+
+指令:
+  盯 000001.SZ    → 开始盯盘
+  停 000001.SZ    → 停止盯盘
+  盯盘列表        → 查看监控列表
+  清盯盘          → 全部停止
+"""
+
+import json
+import os
+import sys
+import time
+import threading
+import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+import numpy as np
+import requests
+from dotenv import load_dotenv
+
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(PROJECT_DIR))
+
+from plays.watchdog.indicators import calc_all, check_trend, check_pullback, check_entry_score, check_exit_signal
+from plays.limit_up.l2api_client import get_client, has_client, to_price, to_volume, normalize_code
+
+logger = logging.getLogger(__name__)
+
+STATE_FILE = PROJECT_DIR / "plays" / "watchdog" / "data" / "state.json"
+SCAN_INTERVAL = 30  # 每30秒检查一次信号
+MAX_WATCH = 1       # 试用期仅预留1个盯盘位，其余给pipeline扫描
+
+# ---- 飞书推送 ----
+
+def _push_feishu(text: str):
+    """推送盯盘信号到飞书"""
+    try:
+        env_file = PROJECT_DIR / ".env"
+        config = {}
+        if env_file.exists():
+            load_dotenv(env_file)
+        app_id = os.getenv("FEISHU_APP_ID", "")
+        app_secret = os.getenv("FEISHU_APP_SECRET", "")
+        chat_id = os.getenv("FEISHU_CHAT_ID_SIGNAL", os.getenv("FEISHU_BOT_CHAT_ID", ""))
+
+        if not app_id or not app_secret:
+            logger.warning("飞书未配置，跳过推送")
+            return
+
+        # 获取tenant token
+        resp = requests.post(
+            "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+            json={"app_id": app_id, "app_secret": app_secret}, timeout=10
+        )
+        token = resp.json().get("tenant_access_token", "")
+
+        if token and chat_id:
+            requests.post(
+                f"https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                json={
+                    "receive_id": chat_id,
+                    "msg_type": "text",
+                    "content": json.dumps({"text": text}),
+                }, timeout=10
+            )
+    except Exception as e:
+        logger.error(f"飞书推送失败: {e}")
+
+
+# ---- 盯盘状态管理 ----
+
+class WatchState:
+    """单只股票的盯盘状态"""
+
+    def __init__(self, code: str):
+        self.code = code
+        self.added_at = datetime.now().isoformat()
+        self.status = "watching"  # watching | signal_pending | entered
+        # 日线指标缓存
+        self.indicators: dict = {}
+        self.last_daily_update: str = ""  # YYYYMMDD
+        # 入场相关
+        self.entry_price: float = 0.0
+        self.entry_at: str = ""
+        self.highest_since_entry: float = 0.0
+        self.bars_held: int = 0
+        self.signal_low: float = 0.0   # Step2触发时的最低价(做多参考)
+        self.signal_high: float = 0.0  # Step2触发时的最高价(做空参考)
+        self.avg_vol_20: float = 0.0
+        # 上次推送时间(防抖)
+        self.last_alert_at: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "code": self.code, "added_at": self.added_at, "status": self.status,
+            "entry_price": self.entry_price, "entry_at": self.entry_at,
+            "highest_since_entry": self.highest_since_entry, "bars_held": self.bars_held,
+            "signal_low": self.signal_low, "signal_high": self.signal_high,
+            "signal_at": self.signal_at, "avg_vol_20": self.avg_vol_20,
+            "last_alert_at": self.last_alert_at, "last_daily_update": self.last_daily_update,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "WatchState":
+        s = cls(d["code"])
+        s.added_at = d.get("added_at", "")
+        s.status = d.get("status", "watching")
+        s.entry_price = d.get("entry_price", 0.0)
+        s.entry_at = d.get("entry_at", "")
+        s.highest_since_entry = d.get("highest_since_entry", 0.0)
+        s.bars_held = d.get("bars_held", 0)
+        s.signal_low = d.get("signal_low", 0.0)
+        s.signal_high = d.get("signal_high", 0.0)
+        s.signal_at = d.get("signal_at", "")
+        s.avg_vol_20 = d.get("avg_vol_20", 0.0)
+        s.last_alert_at = d.get("last_alert_at", "")
+        s.last_daily_update = d.get("last_daily_update", "")
+        return s
+
+
+class WatchdogEngine:
+    """盯盘引擎 (单例)"""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._states: dict[str, WatchState] = {}
+        self._running = False
+        self._thread: Optional[threading.Thread] = None
+        self._load_state()
+
+    # ---- 生命周期 ----
+
+    def start(self):
+        if self._running:
+            return
+        if not has_client():
+            logger.warning("l2api 未启动，盯盘引擎无法工作")
+            return
+        self._running = True
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+        logger.info("盯盘引擎已启动")
+
+    def stop(self):
+        self._running = False
+        if self._thread:
+            self._thread.join(timeout=5)
+        self._save_state()
+        logger.info("盯盘引擎已停止")
+
+    # ---- 指令处理 ----
+
+    def add(self, codes: list[str]) -> str:
+        codes = [normalize_code(c) for c in codes]
+        msgs = []
+        with self._lock:
+            current = len(self._states)
+            for code in codes:
+                if code in self._states:
+                    msgs.append(f"{code} 已在盯盘中")
+                    continue
+                if current >= MAX_WATCH:
+                    msgs.append(f"盯盘已达上限({MAX_WATCH}只)，无法添加 {code}")
+                    continue
+                st = WatchState(code)
+                # 立即获取日线数据
+                self._update_daily(st)
+                self._states[code] = st
+                current += 1
+                msgs.append(f"开始盯盘 {code}")
+            self._save_state()
+            # 同步l2api订阅
+            client = get_client()
+            client.subscribe(list(self._states.keys()))
+
+        # 为新增股票推送初始状态
+        for code in codes:
+            if code in self._states:
+                st = self._states[code]
+                trend_ok, trend_reason = check_trend(st.indicators) if st.indicators else (False, "数据加载中")
+                _push_feishu(f"👁 盯盘 {code}\n趋势: {trend_reason}")
+
+        return "\n".join(msgs)
+
+    def remove(self, codes: list[str]) -> str:
+        codes = [normalize_code(c) for c in codes]
+        msgs = []
+        with self._lock:
+            for code in codes:
+                if code in self._states:
+                    st = self._states.pop(code)
+                    # 如果入场了，生成盯盘小结
+                    if st.status == "entered":
+                        pnl = "持仓中" if st.entry_price > 0 else ""
+                        msgs.append(f"停止盯盘 {code} ({pnl})")
+                    else:
+                        msgs.append(f"停止盯盘 {code}")
+                else:
+                    msgs.append(f"{code} 未在盯盘中")
+            self._save_state()
+            # 同步l2api取消订阅
+            client = get_client()
+            client.unsubscribe(list(codes))
+        return "\n".join(msgs)
+
+    def clear_all(self) -> str:
+        with self._lock:
+            count = len(self._states)
+            codes = list(self._states.keys())
+            self._states.clear()
+            self._save_state()
+            client = get_client()
+            client.unsubscribe(codes)
+        return f"已清空{count}只盯盘标的"
+
+    def list_all(self) -> str:
+        with self._lock:
+            if not self._states:
+                return "当前无盯盘标的"
+            lines = ["📋 盯盘列表:"]
+            for code, st in self._states.items():
+                status_icon = {"watching": "👁", "signal_pending": "⏳", "entered": "📈"}.get(st.status, "❓")
+                lines.append(f"  {status_icon} {code} [{st.status}]")
+            return "\n".join(lines)
+
+    # ---- 内部循环 ----
+
+    def _loop(self):
+        logger.info("盯盘循环启动")
+        while self._running:
+            try:
+                with self._lock:
+                    codes = list(self._states.keys())
+                if codes:
+                    self._scan_round(codes)
+            except Exception as e:
+                logger.error(f"盯盘循环异常: {e}")
+            time.sleep(SCAN_INTERVAL)
+        logger.info("盯盘循环退出")
+
+    def _scan_round(self, codes: list[str]):
+        client = get_client()
+        today = datetime.now().strftime("%Y%m%d")
+        now = datetime.now()
+
+        for code in codes:
+            with self._lock:
+                st = self._states.get(code)
+                if not st:
+                    continue
+
+            # 更新日线数据(每天一次)
+            if st.last_daily_update != today:
+                self._update_daily(st)
+
+            if not st.indicators:
+                continue
+
+            # 获取实时数据
+            market = client.get_market(code, max_age=30)
+            if not market:
+                continue
+
+            last = to_price(market.get("last", "0"))
+            vwap_val = client.get_vwap(code)
+            # 用Market trade_volume作为日内成交量
+            current_vol = to_volume(market.get("trade_volume", "0"))
+
+            inds = st.indicators
+            atr_val = inds["atr20"][-1] if not np.isnan(inds["atr20"][-1]) else 0
+
+            if st.status == "watching":
+                self._check_entry(st, inds, last, vwap_val, current_vol, atr_val, now)
+
+            elif st.status == "signal_pending":
+                self._check_entry_confirm(st, inds, last, vwap_val, current_vol, atr_val, market, now)
+
+            elif st.status == "entered":
+                self._check_exit(st, inds, last, atr_val, now)
+
+    # ---- 入场检测 ----
+
+    def _check_entry(self, st: WatchState, inds: dict, last: float, vwap: float,
+                     current_vol: float, atr_val: float, now: datetime):
+        # Step 1: 趋势过滤
+        trend_ok, trend_reason = check_trend(inds)
+        if not trend_ok:
+            return
+
+        # Step 2: 回调待机
+        pullback_ok, pb_reason = check_pullback(inds, last, -1)
+        if not pullback_ok:
+            return
+
+        # Step 2 触发 → 标记观察信号
+        st.status = "signal_pending"
+        st.signal_low = last   # 做多参考: 触发时低点
+        st.signal_high = last  # 做空参考: 触发时高点
+        st.signal_at = now.strftime("%H:%M:%S")
+        st.avg_vol_20 = float(np.nanmean(inds.get("volume_20", np.array([current_vol]))))
+        st.last_alert_at = now.strftime("%H:%M")
+        self._save_state()
+        _push_feishu(
+            f"⏳ {st.code} 回调待机信号\n"
+            f"趋势: {trend_reason}\n"
+            f"触发: {pb_reason}\n"
+            f"参考低点: {last:.2f} | VWAP: {vwap:.2f}"
+        )
+
+    # ---- 入场确认 ----
+
+    def _check_entry_confirm(self, st: WatchState, inds: dict, last: float, vwap: float,
+                              current_vol: float, atr_val: float, market: dict, now: datetime):
+        # Step 3: 入场计分
+        open_price = to_price(market.get("open", "0"))
+        score, score_reason = check_entry_score(
+            inds, atr_val, vwap, open_price,
+            st.signal_low, st.signal_high, last, current_vol, st.avg_vol_20
+        )
+
+        if score >= 2:
+            st.status = "entered"
+            st.entry_price = last
+            st.entry_at = now.strftime("%Y-%m-%d %H:%M:%S")
+            st.highest_since_entry = last
+            st.bars_held = 0
+            self._save_state()
+            _push_feishu(
+                f"📈 {st.code} 入场信号!\n"
+                f"入场价: {last:.2f} | {score_reason}\n"
+                f"ATR: {atr_val:.2f} | VWAP: {vwap:.2f}\n"
+                f"止损位: {last - 2*atr_val:.2f} (2×ATR)"
+            )
+        else:
+            # 计分不足 → 重置(信号过期)
+            st.status = "watching"
+            st.signal_low = 0.0
+            st.signal_high = 0.0
+            st.signal_at = ""
+            self._save_state()
+
+    # ---- 出场检测 ----
+
+    def _check_exit(self, st: WatchState, inds: dict, last: float, atr_val: float, now: datetime):
+        if st.entry_price <= 0:
+            return
+
+        # 更新最高价
+        if last > st.highest_since_entry:
+            st.highest_since_entry = last
+
+        # 移动止损
+        stop_price = st.highest_since_entry - 2 * atr_val
+        if last <= stop_price:
+            pnl_pct = (last / st.entry_price - 1) * 100
+            _push_feishu(
+                f"🛑 {st.code} 移动止损触发\n"
+                f"入场: {st.entry_price:.2f} → 现价: {last:.2f}\n"
+                f"最高: {st.highest_since_entry:.2f} | 止损: {stop_price:.2f}\n"
+                f"盈亏: {pnl_pct:+.2f}%"
+            )
+            self.remove([st.code])
+            return
+
+        # 分批止盈 (3×ATR)
+        profit_target = st.entry_price + 3 * atr_val
+        if last >= profit_target and st.bars_held > 0:
+            pnl_pct = (last / st.entry_price - 1) * 100
+            _push_feishu(
+                f"💰 {st.code} 止盈目标到达\n"
+                f"入场: {st.entry_price:.2f} → 现价: {last:.2f}\n"
+                f"盈亏: {pnl_pct:+.2f}% | 建议平50%"
+            )
+
+        # 趋势反转 / 时间止损
+        exit_signal, exit_reason = check_exit_signal(inds, st.entry_price,
+                                                      st.highest_since_entry, st.bars_held, atr_val, last,
+                                                      max_profit_since_entry=st.highest_since_entry - st.entry_price)
+        if exit_signal:
+            pnl_pct = (last / st.entry_price - 1) * 100
+            _push_feishu(
+                f"🔻 {st.code} {exit_reason}\n"
+                f"入场: {st.entry_price:.2f} → 现价: {last:.2f}\n"
+                f"盈亏: {pnl_pct:+.2f}% | 持仓{st.bars_held}根K线"
+            )
+            self.remove([st.code])
+
+    # ---- 日线数据更新 ----
+
+    def _update_daily(self, st: WatchState):
+        """从Tushare获取日线数据并计算指标"""
+        try:
+            env_file = PROJECT_DIR / ".env"
+            config = {}
+            if env_file.exists():
+                with open(env_file) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            k, v = line.split("=", 1)
+                            config[k] = v
+
+            token = config.get("TUSHARE_TOKEN", "")
+            if not token:
+                return
+
+            resp = requests.post("https://api.tushare.pro", json={
+                "api_name": "daily",
+                "token": token,
+                "params": {"ts_code": st.code, "limit": 120},
+                "fields": "trade_date,open,high,low,close,pre_close,vol,amount",
+            }, timeout=15)
+            data = resp.json()
+            items = data.get("data", {}).get("items", [])
+            if not items or len(items) < 30:
+                logger.warning(f"{st.code} 日线数据不足({len(items)}条)")
+                return
+
+            fields = data["data"]["fields"]
+            # 按日期升序
+            rows = sorted(items, key=lambda x: x[0])
+            df = {f: np.array([row[i] for row in rows], dtype=float) for i, f in enumerate(fields)}
+            df["volume"] = df.get("vol", np.zeros(len(rows)))
+
+            inds = calc_all(df)
+            inds["close"] = df.get("close", np.array([]))
+            inds["volume_20"] = np.convolve(df["volume"], np.ones(20)/20, mode="same")
+
+            st.indicators = inds
+            st.last_daily_update = datetime.now().strftime("%Y%m%d")
+            self._save_state()
+            logger.info(f"{st.code} 日线指标更新完成({len(rows)}条)")
+
+        except Exception as e:
+            logger.error(f"{st.code} 日线更新失败: {e}")
+
+    # ---- 状态持久化 ----
+
+    def _save_state(self):
+        try:
+            STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            data = {code: st.to_dict() for code, st in self._states.items()}
+            with open(STATE_FILE, "w") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"状态保存失败: {e}")
+
+    def _load_state(self):
+        try:
+            if STATE_FILE.exists():
+                with open(STATE_FILE) as f:
+                    data = json.load(f)
+                for code, d in data.items():
+                    self._states[code] = WatchState.from_dict(d)
+                logger.info(f"加载盯盘状态: {len(self._states)} 只")
+        except Exception as e:
+            logger.error(f"状态加载失败: {e}")
+
+
+# ---- 全局单例 ----
+
+_engine: Optional[WatchdogEngine] = None
+
+
+def get_engine() -> WatchdogEngine:
+    global _engine
+    if _engine is None:
+        _engine = WatchdogEngine()
+    return _engine

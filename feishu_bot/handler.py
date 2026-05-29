@@ -779,8 +779,60 @@ async def handle_message_event(event: dict):
             "  @机器人 000001.SZ\n"
             "  @机器人 贵州茅台 和 宁德时代\n\n"
             "分析完成后可追问：\"为什么是4星？\"、\"基本面为什么这么低？\"、\"资金面详细说说\"\n"
-            "也可直接问知识：\"什么是AUC？\"、\"涨停均排是什么意思？\""
+            "也可直接问知识：\"什么是AUC？\"、\"涨停均排是什么意思？\"\n\n"
+            "**盯盘助手：**\n"
+            "  @机器人 盯 000001.SZ\n"
+            "  @机器人 停 000001.SZ\n"
+            "  @机器人 盯盘列表"
         )
+        return
+
+    # ── 1.5 盯盘指令路由 ──
+    watchdog_keywords = {
+        "盯盘列表": "list",
+        "清盯盘": "clear",
+    }
+    wd_action = None
+    for kw, action in watchdog_keywords.items():
+        if kw in text:
+            wd_action = action
+            break
+
+    if text.startswith("盯 ") or text.startswith("watch "):
+        wd_action = "add"
+    elif text.startswith("停 ") or text.startswith("stop "):
+        wd_action = "remove"
+
+    if wd_action:
+        try:
+            from plays.watchdog.watchdog import get_engine
+            engine = get_engine()
+            # 确保l2api已启动
+            from plays.limit_up.l2api_client import has_client, get_client as get_l2
+            engine.start()
+
+            if wd_action == "list":
+                result = engine.list_all()
+                await FEISHU_CLIENT.reply_text(message_id, result)
+            elif wd_action == "clear":
+                result = engine.clear_all()
+                await FEISHU_CLIENT.reply_text(message_id, f"✅ {result}")
+            elif wd_action == "add":
+                codes = parse_stock_codes(text)
+                if codes:
+                    result = engine.add(codes)
+                    await FEISHU_CLIENT.reply_text(message_id, f"✅ {result}")
+                else:
+                    await FEISHU_CLIENT.reply_text(message_id, "请指定股票代码，如: 盯 000001.SZ")
+            elif wd_action == "remove":
+                codes = parse_stock_codes(text)
+                if codes:
+                    result = engine.remove(codes)
+                    await FEISHU_CLIENT.reply_text(message_id, f"✅ {result}")
+                else:
+                    await FEISHU_CLIENT.reply_text(message_id, "请指定股票代码，如: 停 000001.SZ")
+        except Exception as e:
+            await FEISHU_CLIENT.reply_text(message_id, f"盯盘助手启动失败: {e}")
         return
 
     codes = parse_stock_codes(text)

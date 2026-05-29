@@ -13,14 +13,16 @@ safe_int = safe_int_none
 
 def score_fundflow(code):
     """
-    资金面涨停潜力预判 V2.4
-    五维度量化评分：超大单主力45分 + 龙虎榜机构游资25分 + 分时盘口10分 + 融资聪明资金7分 + 筹码抛压13分
+    资金面涨停潜力预判 V2.5
+    五维度量化评分：超大单主力45分 + 龙虎榜机构游资25分 + 分时盘口20分 + 融资聪明资金7分 + 筹码抛压13分
     含一票否决规则（含V2.0市场状态调节器+一字板豁免）
-    
-    V2.4变更（基于V2.3）:
-    - 主力净流入升级为东财f62实时数据(替代T+1 Tushare moneyflow)
-    - 规模阈值因子 15→25(+10, 确定性提升)
-    - 分时盘口因T+1噪音 20→10(-10, 降权)
+
+    V2.5变更（l2api Level2接入）:
+    - 分时盘口上限 10→20 恢复(分钟K线+VWAP+十档盘口就绪)
+    - 新增 盘口买卖比因子: total_bid_vol/total_ask_vol>1.5→+8分, >1.2→+5分
+    - 新增 VWAP乖离率因子: 价格在VWAP上方<1%→+6分
+    - 否决5尾盘检测升级: l2api分钟K线→精确尾盘量价分析; 降级保留原日频代理
+    - l2api不可用时自动回退原V2.4逻辑
     
     V2.3变更（基于V2.1）：
     - 否决4增加3日累计豁免：<5%+3日累计净流入≤0才否决，>0转入维度1扣-5分
@@ -46,11 +48,31 @@ def score_fundflow(code):
     - 否决4加一字板豁免
     
     注意：分时盘口为实时数据，T+1场景下用资金流向结构替代评估
+    V2.5: 接入l2api Level2数据(十档盘口+逐笔成交+分钟VWAP)，分时盘口恢复20分上限
     """
     from datetime import datetime, timedelta
-    
+
     token = CONFIG["TUSHARE_TOKEN"]
     today = datetime.now().strftime("%Y%m%d")
+
+    # V2.5: 尝试获取l2api实时数据
+    l2_market = None
+    l2_vwap = None
+    l2_kline = []
+    l2_net_flow = 0.0  # Tran聚合的主力净流向(买-卖)
+    try:
+        from plays.limit_up.l2api_client import has_client, get_client, to_price, to_volume
+        if has_client():
+            c = get_client()
+            l2_market = c.get_market(code)
+            if l2_market:
+                l2_vwap = c.get_vwap(code)
+                l2_kline = c.get_minute_kline(code, n=30)
+                # 聚合最近5分钟Tran净流向
+                recent_bars = l2_kline[-5:] if len(l2_kline) >= 5 else l2_kline
+                # Tran数据通过K线间接反映(volume增量方向)
+    except Exception:
+        pass
     
     score = 0
     reason = []
@@ -263,35 +285,45 @@ def score_fundflow(code):
                     else:
                         veto_flags.append(f"资金背离[T+1]:涨{pct_change:.1f}%但净流出{abs(net_mf)/10000:.0f}万")
     
-    # V2.3: 否决5 — 尾盘集中兑现（组合A/B阈值，日频代理）
-    # 原为一票否决，改为降级为维度3扣分（弱势震荡市尾盘走弱常见，不应直接否决）
+    # V2.5: 否决5 — 尾盘集中兑现（优先l2api分钟K线，降级日频代理）
     dim3_tail_penalty = 0
-    # 组合A：14:30后成交量占全天>25% AND 收盘价<分时均价线
-    # 组合B：14:00后成交量占全天>45% AND 当日收跌 AND 收盘价<分时均价线
-    # 分时均价线代理（无分钟数据时）：收盘价 < (最高价+最低价)/2
-    if daily_data:
-        close = safe_float(daily_data[0].get("close", 0))
-        high = safe_float(daily_data[0].get("high", 0))
-        low = safe_float(daily_data[0].get("low", 0))
-        pct_chg = safe_float(daily_data[0].get("pct_chg", 0))
-        # 分时均价线代理
-        avg_price_proxy = (high + low) / 2 if high > 0 and low > 0 else 0
-        below_avg = close < avg_price_proxy if avg_price_proxy > 0 else False
-        
-        # 无分钟成交量数据，用净流向结构做日频代理
-        if moneyflow_data:
-            latest_mf = moneyflow_data[0]
-            net_mf = safe_float(latest_mf.get("net_mf_amount", 0))
-            
-            # 组合A代理：主力净流出 + 收盘低于均价（模拟尾盘兑现）
-            if net_mf < 0 and below_avg:
-                dim3_tail_penalty += 5  # 降分而非否决
-                reason.append(f"[尾盘走弱]净流出{abs(net_mf)/10000:.0f}万+低于均价-5")
-            
-            # 组合B代理：收跌 + 净流出 + 低于均价（更弱信号）
-            if pct_chg < 0 and net_mf < 0 and below_avg:
-                dim3_tail_penalty += 5
-                reason.append(f"[尾盘走弱]收跌+净流出+低于均价-5")
+    if l2_kline and len(l2_kline) >= 5:
+        # 有分钟K线: 精确检测尾盘走弱
+        tail_bars = [b for b in l2_kline if b.get("time", "") >= "1430"]
+        if tail_bars:
+            # 14:30后成交量占比
+            tail_vol = sum(b.get("volume", 0) for b in tail_bars)
+            total_vol = sum(b.get("volume", 0) for b in l2_kline)
+            tail_vol_ratio = tail_vol / total_vol if total_vol > 0 else 0
+            # 尾盘均价 vs 全天VWAP
+            if tail_vol > 0:
+                tail_vwap = sum(b.get("amount", 0) for b in tail_bars) / tail_vol
+                full_vwap = sum(b.get("amount", 0) for b in l2_kline) / total_vol if total_vol > 0 else 0
+                tail_weak = tail_vwap < full_vwap and tail_vol_ratio > 0.25  # 尾盘放量下跌
+                if tail_weak:
+                    dim3_tail_penalty += 8
+                    reason.append(f"[尾盘走弱L2]尾盘{tail_vol_ratio:.0%}量+均价下行-8")
+                elif tail_vol_ratio > 0.35 and tail_vwap < full_vwap * 0.995:
+                    dim3_tail_penalty += 5
+                    reason.append(f"[尾盘松动L2]尾盘{tail_vol_ratio:.0%}量-5")
+    else:
+        # 降级日频代理 (原逻辑)
+        if daily_data:
+            close = safe_float(daily_data[0].get("close", 0))
+            high = safe_float(daily_data[0].get("high", 0))
+            low = safe_float(daily_data[0].get("low", 0))
+            pct_chg = safe_float(daily_data[0].get("pct_chg", 0))
+            avg_price_proxy = (high + low) / 2 if high > 0 and low > 0 else 0
+            below_avg = close < avg_price_proxy if avg_price_proxy > 0 else False
+            if moneyflow_data:
+                latest_mf = moneyflow_data[0]
+                net_mf = safe_float(latest_mf.get("net_mf_amount", 0))
+                if net_mf < 0 and below_avg:
+                    dim3_tail_penalty += 5
+                    reason.append(f"[尾盘走弱]净流出{abs(net_mf)/10000:.0f}万+低于均价-5")
+                if pct_chg < 0 and net_mf < 0 and below_avg:
+                    dim3_tail_penalty += 5
+                    reason.append(f"[尾盘走弱]收跌+净流出+低于均价-5")
     
     # 触发否决直接返回
     if veto_flags:
@@ -534,75 +566,100 @@ def score_fundflow(code):
     if dim2_reason:
         reason.append(f"[龙虎{dim2_score}分] {' '.join(dim2_reason)}")
     
-    # ===== 5. 维度3：分时盘口资金抢筹（20分）=====
-    # 注意：T+1数据无法获取实时分时，用资金流向结构替代评估
+    # ===== 5. 维度3：分时盘口资金抢筹（20分）V2.5: l2api升级 =====
     dim3_score = 0
     dim3_reason = []
-    
+
+    # --- V2.5: l2api实时因子 (优先) ---
+    if l2_market:
+        last = to_price(l2_market.get("last", "0"))
+        total_bid_vol = to_volume(l2_market.get("total_bid_volume", "0"))
+        total_ask_vol = to_volume(l2_market.get("total_ask_volume", "0"))
+
+        # 盘口买卖比: 买盘总量/卖盘总量 > 1.2 → 买方强势
+        if total_bid_vol > 0 and total_ask_vol > 0:
+            ob_ratio = total_bid_vol / total_ask_vol
+            if ob_ratio > 1.5:
+                dim3_score += 8
+                dim3_reason.append(f"盘口买压{ob_ratio:.1f}x+8")
+            elif ob_ratio > 1.2:
+                dim3_score += 5
+                dim3_reason.append(f"盘口偏买{ob_ratio:.1f}x+5")
+            elif ob_ratio < 0.7:
+                dim3_score -= 5
+                dim3_reason.append(f"盘口偏卖{ob_ratio:.1f}x-5")
+
+        # VWAP乖离率: 价格在VWAP上方<1% → 多头控盘
+        if l2_vwap and l2_vwap > 0:
+            vwap_dev = (last - l2_vwap) / l2_vwap
+            if 0 < vwap_dev < 0.01:
+                dim3_score += 6
+                dim3_reason.append(f"VWAP上方{vwap_dev:.2%}+6")
+            elif -0.005 < vwap_dev <= 0:
+                dim3_score += 4
+                dim3_reason.append(f"VWAP附近{vwap_dev:.2%}+4")
+            elif vwap_dev < -0.02:
+                dim3_score -= 5
+                dim3_reason.append(f"VWAP下方{vwap_dev:.2%}-5")
+
+    # --- 日频代理因子 (l2api不可用时保留) ---
     if moneyflow_data and daily_data:
         latest = moneyflow_data[0]
         latest_daily = daily_data[0]
         net_mf = safe_float(latest.get("net_mf_amount", 0))
         turnover_rate = safe_float(daily_basic_data[0].get("turnover_rate", 0)) if daily_basic_data else 0
-        
+
         # V2.3: 持续净流入（日频代理）——最低价≥昨收×0.99 包容换手板宽幅震荡
         if net_mf > 0:
             close = safe_float(latest_daily.get("close", 0))
             low = safe_float(latest_daily.get("low", 0))
             high = safe_float(latest_daily.get("high", 0))
             pre_close = safe_float(latest_daily.get("pre_close", 0))
-            
-            # 持续净流入条件：主力净流入>0 AND 最低价≥昨收×0.99 AND 收盘/最高>0.95
+
             low_ok = low >= pre_close * 0.99 if pre_close > 0 else True
             close_high_ok = close / high > 0.95 if high > 0 else True
             if low_ok and close_high_ok:
                 dim3_score += 10
                 dim3_reason.append(f"持续净流入{net_mf/10000:.2f}亿+10")
-            
-            # 强承接：主力净流入>0 AND 换手率>3% AND 换手率/振幅>2.0
+
             amplitude = (high - low) / pre_close * 100 if pre_close > 0 else 0
             if turnover_rate > 3 and amplitude > 0 and (turnover_rate / amplitude) > 2.0:
                 dim3_score += 6
                 dim3_reason.append(f"强承接换手/振幅{max(0,turnover_rate/amplitude if amplitude>0 else 0):.1f}+6")
-            
-            # 脉冲/尾盘回流：超大单净流入>0 AND (中单+小单)净流出>0
+
             buy_elg = safe_float(latest.get("buy_elg_amount", 0))
             sell_elg = safe_float(latest.get("sell_elg_amount", 0))
             buy_lg = safe_float(latest.get("buy_lg_amount", 0))
             sell_lg = safe_float(latest.get("sell_lg_amount", 0))
             elg_net = buy_elg - sell_elg
-            lg_net = buy_lg - sell_lg
-            # 中单+小单净流出 ≈ 总净流入 - 超大单净流入 - 大单净流入（简化：net_mf > 0 + elg_net > 0 即超大单主导）
             if elg_net > 0 and net_mf > 0:
                 dim3_score += 4
                 dim3_reason.append(f"超大单主导+4")
         else:
-            dim3_score = 0
-            dim3_reason.append(f"净流出{abs(net_mf)/10000:.2f}亿")
-        
-        # V2.3 负向过滤（满足任一即扣12分）
+            if not l2_market:  # 仅当无l2api时清空
+                dim3_score = 0
+                dim3_reason.append(f"净流出{abs(net_mf)/10000:.2f}亿")
+
+        # V2.3 负向过滤
         pct_chg = safe_float(daily_basic_data[0].get("pct_chg", 0))
         is_zt = (pct_chg >= 9.5)
         is_negative_triggered = False
-        
-        # ① 当日涨幅>5% AND 换手率<2%（拉升无量）
+
         if pct_chg > 5 and turnover_rate < 2 and not is_zt:
             dim3_score -= 12
             dim3_reason.append(f"拉升无量{pct_chg:.1f}%换手{turnover_rate:.1f}%-12")
             is_negative_triggered = True
-        # ② 当日跌幅>3% AND 换手率>8%（放量出逃）
         if not is_negative_triggered and pct_chg < -3 and turnover_rate > 8:
             dim3_score -= 12
             dim3_reason.append(f"放量出逃{pct_chg:.1f}%换手{turnover_rate:.1f}%-12")
-        # ③ 当日主力净流出>0 AND 换手率>10%（对倒嫌疑）
         if not is_negative_triggered and net_mf < 0 and turnover_rate > 10:
             dim3_score -= 12
             dim3_reason.append(f"对倒嫌疑换手{turnover_rate:.1f}%-12")
-    
-    # 尾盘走弱扣分（原否决5降级）
+
+    # 尾盘走弱扣分（V2.5: l2api精确或日频代理）
     dim3_score -= dim3_tail_penalty
-    
-    dim3_score = max(0, min(10, dim3_score))  # V2.4: T+1噪音,上限从20→10
+
+    dim3_score = max(0, min(20, dim3_score))  # V2.5: l2api上线,上限恢复20
     score += dim3_score
     if dim3_reason:
         reason.append(f"[盘口{dim3_score}分] {' '.join(dim3_reason)}")

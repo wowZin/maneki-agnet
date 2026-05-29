@@ -776,6 +776,30 @@ def main():
         print("过滤后无候选股，退出")
         _write_empty_result("过滤后无候选股")
         return
+
+    # 1.6 l2api Level2 实时数据接入 (试用)
+    l2api = None
+    if CONFIG.get("L2API_ENABLED", "").lower() == "true":
+        from plays.limit_up.l2api_client import get_client
+        l2api_account = CONFIG.get("L2API_ACCOUNT", "")
+        l2api_password = CONFIG.get("L2API_PASSWORD", "")
+        if l2api_account and l2api_password:
+            print("\n[1.6/5] l2api Level2 实时数据接入...")
+            try:
+                l2api = get_client(account=l2api_account, password=l2api_password)
+                l2api.start()
+                # 试用期 TopicCnt=30, 留1个给盯盘, 最多订阅29只
+                l2api_codes = [c["code"] for c in candidates[:29]]
+                l2api.sync_subscriptions(l2api_codes)
+                print(f"  l2api 已订阅 {len(l2api_codes)} 只候选股 (上限30)，等待首笔数据...")
+                time.sleep(3)
+                ready_count = sum(1 for c in l2api_codes if l2api.is_ready(c))
+                print(f"  l2api 数据就绪: {ready_count}/{len(l2api_codes)}")
+            except Exception as e:
+                print(f"  l2api 启动失败: {e}")
+                l2api = None
+        else:
+            print("\n[1.6/5] l2api 未配置账号密码，跳过")
     
     # 2-5. 四维度评分 + 短线博弈
     # 前置过滤：加载今日已分析过的股票得分，避免重复调用Tushare API
@@ -901,7 +925,36 @@ def main():
         
         # 记录权重信息（用于调试和复盘）
         weight_info = {k: f"{v:.1f}" for k, v in weights.items()}
-        
+
+        # 附加 l2api Level2 数据 (验证用)
+        l2data = None
+        if l2api:
+            try:
+                from plays.limit_up.l2api_client import to_price, to_volume
+                market = l2api.get_market(code)
+                kline_5m = l2api.get_minute_kline(code, n=5)
+                vwap = l2api.get_vwap(code)
+                if market:
+                    l2data = {
+                        "last": to_price(market.get("last", "0")),
+                        "open": to_price(market.get("open", "0")),
+                        "high": to_price(market.get("high", "0")),
+                        "low": to_price(market.get("low", "0")),
+                        "prev_close": to_price(market.get("prev_close", "0")),
+                        "trade_volume": to_volume(market.get("trade_volume", "0")),
+                        "trade_amount": to_price(market.get("trade_amount", "0")),
+                        "bid1_price": to_price(market.get("bid_price", [""])[0]) if market.get("bid_price") else 0,
+                        "bid1_qty": to_volume(market.get("bid_qty", [""])[0]) if market.get("bid_qty") else 0,
+                        "ask1_price": to_price(market.get("ask_price", [""])[0]) if market.get("ask_price") else 0,
+                        "ask1_qty": to_volume(market.get("ask_qty", [""])[0]) if market.get("ask_qty") else 0,
+                        "total_bid_volume": to_volume(market.get("total_bid_volume", "0")),
+                        "total_ask_volume": to_volume(market.get("total_ask_volume", "0")),
+                        "vwap": round(vwap, 2) if vwap else None,
+                        "kline_bars": len(kline_5m),
+                    }
+            except Exception as e:
+                l2data = {"error": str(e)}
+
         results.append({
             "code": code,
             "name": name,
@@ -926,8 +979,9 @@ def main():
                 "threshold": resonance_threshold,
                 "is_resonance": resonance_flag
             },
-            "top3_score": round(total, 1),  # V2.6: 等同总分(加权Top3择优)
+            "top3_score": round(total, 1),
             "pct_chg": round(stock.get("pct_chg", 0), 1),
+            "l2api": l2data,  # Level2 实时数据快照
         })
     
     # 排序（全按总分排序，总分=Top3均值）
@@ -950,7 +1004,12 @@ def main():
     # 6. 飞书推送
     print("\n[飞书推送]...")
     push_feishu(results)
-    
+
+    # 7. 清理 l2api
+    if l2api:
+        l2api.stop()
+        print("\n[l2api] 已断开连接")
+
     print("\n" + "=" * 50)
     print("流程完成!")
     print("=" * 50)
